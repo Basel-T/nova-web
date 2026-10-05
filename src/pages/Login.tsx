@@ -1,179 +1,209 @@
 // ============================================================
-// Login.tsx — Frictionless Authentication Page
+// Login.tsx — Sign in / sign up
 // ============================================================
-// Flow:
-//   1. User enters mobile number → click "Continue"
-//   2. If number exists in the cloud DB → log them in immediately
-//   3. If number doesn't exist → show name field → create account
-// No passwords needed. Simple and fast.
+// 1. Mobile number → Continue
+// 2a. Unknown number   → ask for a name → new client account
+// 2b. Client number    → signed in immediately (no password)
+// 2c. Staff number     → password step (admin & barbers)
 // ============================================================
 
-import { useState } from 'react';
-import { findUserByMobile, addUser, setCurrentUser } from '../store';
-import { User } from '../types';
-import { btnGold, inputClass } from '../components';
+import { FormEvent, useState } from 'react';
+import { ArrowLeft, ArrowRight, Lock, Phone, UserRound } from 'lucide-react';
+import type { User } from '../types';
+import { addUser, findUserByMobile, getHoursFor, getSettings, saveSession, staffLogin, useStoreVersion } from '../store';
+import { Avatar, Button, LogoMark, Wordmark, cx, inputCls } from '../ui';
+import { cleanNumber } from '../lib/util';
+import { todayStr } from '../lib/time';
 
-interface Props {
-  onLogin: (user: User) => void;
-}
+type Step = 'phone' | 'name' | 'password';
 
-/** Keep digits only so "050-123 4567" and "0501234567" are the same account */
-const cleanNumber = (s: string) => s.replace(/\D/g, '');
+export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
+  useStoreVersion();
+  const settings = getSettings();
+  const hours = getHoursFor(todayStr());
 
-export default function Login({ onLogin }: Props) {
+  const [step, setStep] = useState<Step>('phone');
   const [mobile, setMobile] = useState('');
-  const [showNameInput, setShowNameInput] = useState(false);
-  const [fullName, setFullName] = useState('');
+  const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  const [staff, setStaff] = useState<User | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [shake, setShake] = useState(0);
 
-  /** Step 1: look the mobile number up in the cloud */
-  const handleMobileSubmit = async () => {
+  const fail = (message: string) => {
+    setError(message);
+    setShake((s) => s + 1);
+  };
+
+  const go = (next: Step) => {
+    setError('');
+    setStep(next);
+  };
+
+  const submitPhone = async (e: FormEvent) => {
+    e.preventDefault();
     const number = cleanNumber(mobile);
-    if (number.length < 7) {
-      setError('Please enter a valid mobile number');
-      return;
-    }
+    if (number.length < 7) return fail('Please enter a valid mobile number');
     setBusy(true);
     setError('');
     try {
       const user = await findUserByMobile(number);
-      if (user) {
-        setCurrentUser(user);
+      if (!user) go('name');
+      else if (user.role === 'client') {
+        saveSession({ user });
         onLogin(user);
       } else {
-        setShowNameInput(true);
+        setStaff(user);
+        setPassword('');
+        go('password');
       }
     } catch {
-      setError('Could not reach the server. Check your connection and try again.');
+      fail("Can't reach the shop right now — check your connection");
     } finally {
       setBusy(false);
     }
   };
 
-  /** Step 2: new user gives their name → account is created */
-  const handleRegister = async () => {
-    if (fullName.trim().length < 2) {
-      setError('Please enter your full name');
-      return;
-    }
+  const submitName = async (e: FormEvent) => {
+    e.preventDefault();
+    if (name.trim().length < 2) return fail('Please enter your full name');
     setBusy(true);
-    setError('');
     try {
-      const newUser = await addUser(fullName.trim(), cleanNumber(mobile));
-      setCurrentUser(newUser);
-      onLogin(newUser);
+      onLogin(await addUser(name.trim(), cleanNumber(mobile)));
     } catch {
-      setError('Could not create your account. Please try again.');
+      fail('Could not create your account — please try again');
       setBusy(false);
     }
   };
 
-  const demoLogin = (n: string) => {
-    setMobile(n);
-    setShowNameInput(false);
-    setError('');
+  const submitPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!password) return fail('Enter your password');
+    setBusy(true);
+    try {
+      const user = await staffLogin(cleanNumber(mobile), password);
+      if (user) onLogin(user);
+      else {
+        setPassword('');
+        fail('Incorrect password');
+        setBusy(false);
+      }
+    } catch {
+      fail("Can't reach the shop right now — check your connection");
+      setBusy(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 flex flex-col">
-      <div className="barber-stripe h-1.5" />
+    <div className="page-glow grain flex min-h-dvh flex-col">
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 py-12">
+        {/* Brand */}
+        <div className="animate-rise flex flex-col items-center text-center">
+          <LogoMark size={68} />
+          <Wordmark name={settings.shop_name} className="mt-7 text-[52px]" />
+          <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.38em] text-gold-400/80">{settings.tagline}</p>
+        </div>
 
-      {/* Branding */}
-      <div className="text-center pt-14 pb-8 px-6 text-white">
-        <div className="text-6xl mb-4">💈</div>
-        <h1 className="font-display text-4xl font-bold tracking-wider uppercase">
-          Blade <span className="text-amber-500">&</span> Fade
-        </h1>
-        <p className="text-neutral-400 mt-2 text-sm tracking-widest uppercase">Barbershop · Est. 2026</p>
-      </div>
+        <div className="hairline my-10" />
 
-      {/* Card */}
-      <div className="flex-1 bg-stone-100 rounded-t-[2rem] px-5 pt-8 pb-10">
-        <div className="max-w-md mx-auto">
-          {!showNameInput ? (
-            <div>
-              <h2 className="font-display text-2xl font-semibold text-neutral-900 uppercase tracking-wide">
-                Book your cut
-              </h2>
-              <p className="text-neutral-500 text-sm mt-1 mb-6">Enter your mobile number to sign in or sign up.</p>
-
-              <label className="block text-sm font-medium text-neutral-600 mb-2">Mobile Number</label>
-              <input
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                value={mobile}
-                onChange={(e) => setMobile(e.target.value)}
-                placeholder="e.g. 050 123 4567"
-                className={inputClass}
-                onKeyDown={(e) => e.key === 'Enter' && handleMobileSubmit()}
-              />
-              {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-              <button onClick={handleMobileSubmit} disabled={busy} className={`${btnGold} w-full mt-6 py-4 text-lg`}>
-                {busy ? 'Checking…' : 'Continue'}
-              </button>
-            </div>
-          ) : (
-            <div>
-              <div className="bg-neutral-900 text-white rounded-2xl p-4 mb-6">
-                <p className="text-sm text-center">
-                  👋 New here? Welcome! Let's set up your account.
-                </p>
+        <div key={step} className="animate-rise" style={{ animationDelay: '60ms' }}>
+          {step === 'phone' && (
+            <form onSubmit={submitPhone}>
+              <h1 className="font-display text-[34px] leading-tight text-cream">Book your next cut</h1>
+              <p className="mt-2 text-sm text-ink-400">Sign in or create an account with your mobile number.</p>
+              <div key={shake} className={cx('relative mt-7', shake > 0 && 'animate-shake')}>
+                <Phone className="pointer-events-none absolute left-4 top-1/2 size-[18px] -translate-y-1/2 text-ink-400" />
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  aria-label="Mobile number"
+                  placeholder="Mobile number"
+                  value={mobile}
+                  onChange={(e) => setMobile(e.target.value)}
+                  className={cx(inputCls, 'tnum h-14 pl-11 text-[17px] tracking-wide')}
+                />
               </div>
-              <label className="block text-sm font-medium text-neutral-600 mb-2">Your Full Name</label>
-              <input
-                type="text"
-                autoComplete="name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="e.g. James Carter"
-                className={inputClass}
-                autoFocus
-                onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
-              />
-              {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-              <button onClick={handleRegister} disabled={busy} className={`${btnGold} w-full mt-6 py-4 text-lg`}>
-                {busy ? 'Creating…' : 'Create Account'}
-              </button>
-              <button
-                onClick={() => {
-                  setShowNameInput(false);
-                  setError('');
-                }}
-                className="w-full mt-3 py-3 text-neutral-500 hover:text-neutral-800 transition-colors text-sm"
-              >
-                ← Change number
-              </button>
-            </div>
+              {error && <p className="mt-2.5 text-sm text-rose-300">{error}</p>}
+              <Button type="submit" variant="gold" size="lg" className="mt-5 w-full" loading={busy}>
+                Continue <ArrowRight className="size-4" />
+              </Button>
+              <p className="mt-6 text-center text-xs text-ink-500">Barbers and staff sign in with their number and password.</p>
+            </form>
           )}
 
-          {/* Demo logins — tap to fill */}
-          <div className="mt-10 border-t border-stone-300 pt-6">
-            <p className="text-xs text-neutral-400 text-center uppercase tracking-widest mb-3">Demo logins (tap to fill)</p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              {[
-                ['👑 Admin', '0000000000'],
-                ['✂️ Marcus (Barber)', '1111111111'],
-                ['✂️ Leo (Barber)', '2222222222'],
-                ['✂️ Omar (Barber)', '3333333333'],
-              ].map(([label, n]) => (
-                <button
-                  key={n}
-                  onClick={() => demoLogin(n)}
-                  className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-left hover:border-amber-400 transition-colors"
-                >
-                  <span className="block font-semibold text-neutral-700">{label}</span>
-                  <span className="font-mono text-neutral-400">{n}</span>
-                </button>
-              ))}
-            </div>
-            <p className="text-[11px] text-neutral-400 text-center mt-3">
-              Any other number = new customer account
-            </p>
-          </div>
+          {step === 'name' && (
+            <form onSubmit={submitName}>
+              <BackLink onClick={() => go('phone')} />
+              <h1 className="font-display text-[34px] leading-tight text-cream">Welcome</h1>
+              <p className="mt-2 text-sm text-ink-400">Looks like you're new here. What should we call you?</p>
+              <div key={shake} className={cx('relative mt-7', shake > 0 && 'animate-shake')}>
+                <UserRound className="pointer-events-none absolute left-4 top-1/2 size-[18px] -translate-y-1/2 text-ink-400" />
+                <input
+                  autoFocus
+                  autoComplete="name"
+                  aria-label="Full name"
+                  placeholder="Full name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className={cx(inputCls, 'h-14 pl-11 text-[17px]')}
+                />
+              </div>
+              {error && <p className="mt-2.5 text-sm text-rose-300">{error}</p>}
+              <Button type="submit" variant="gold" size="lg" className="mt-5 w-full" loading={busy}>
+                Create account
+              </Button>
+            </form>
+          )}
+
+          {step === 'password' && staff && (
+            <form onSubmit={submitPassword}>
+              <BackLink onClick={() => go('phone')} />
+              <div className="flex items-center gap-4">
+                <Avatar name={staff.full_name} size={52} />
+                <div>
+                  <h1 className="font-display text-[30px] leading-tight text-cream">Welcome back{staff.role === 'stylist' ? `, ${staff.full_name.split(' ')[0]}` : ''}</h1>
+                  <p className="text-sm text-ink-400">{staff.role === 'admin' ? 'Admin sign-in' : 'Barber sign-in'}</p>
+                </div>
+              </div>
+              <div key={shake} className={cx('relative mt-7', shake > 0 && 'animate-shake')}>
+                <Lock className="pointer-events-none absolute left-4 top-1/2 size-[18px] -translate-y-1/2 text-ink-400" />
+                <input
+                  autoFocus
+                  type="password"
+                  autoComplete="current-password"
+                  aria-label="Password"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={cx(inputCls, 'h-14 pl-11 text-[17px] tracking-widest')}
+                />
+              </div>
+              {error && <p className="mt-2.5 text-sm text-rose-300">{error}</p>}
+              <Button type="submit" variant="gold" size="lg" className="mt-5 w-full" loading={busy}>
+                Sign in
+              </Button>
+            </form>
+          )}
         </div>
-      </div>
+      </main>
+
+      <footer className="px-6 pb-8 text-center text-xs text-ink-500">
+        {hours ? `Open today ${hours.open} – ${hours.close}` : 'Closed today'} · {settings.address}
+      </footer>
     </div>
+  );
+}
+
+function BackLink({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mb-6 inline-flex items-center gap-1.5 text-sm text-ink-400 transition-colors hover:text-cream"
+    >
+      <ArrowLeft className="size-4" /> Change number
+    </button>
   );
 }
