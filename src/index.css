@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+/* Brand fonts: Inter for body text, Oswald for bold barbershop headings */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Oswald", "Inter", ui-sans-serif, sans-serif;
+}
+
+body {
+  background: #f5f5f4;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Hide scrollbars for horizontal scroll containers */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Barber-pole stripe used as a decorative accent */
+.barber-stripe {
+  background: repeating-linear-gradient(
+    -45deg,
+    #b91c1c 0 10px,
+    #ffffff 10px 20px,
+    #1d4ed8 20px 30px,
+    #ffffff 30px 40px
+  );
+}
+
+/* Slide-up animation for modals (iOS-style action sheet) */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
