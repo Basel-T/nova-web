@@ -99,7 +99,7 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
   const save = async () => {
     const number = cleanNumber(mobile);
     if (name.trim().length < 2) return setError('Enter the barber’s name');
-    if (number.length < 7) return setError('Enter a valid mobile number — the barber uses it to sign in');
+    if (number.length < 3) return setError('Enter a login number — the barber uses it to sign in');
     if (isNew && password.length < 3) return setError('Set a password of at least 3 characters');
     if (!isNew && password && password.length < 3) return setError('Password must be at least 3 characters');
     setError('');
@@ -195,8 +195,8 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
         <Field label="Bio" hint="Shown to clients when they choose a barber.">
           <textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} placeholder="Specialities, experience…" className={textareaCls} />
         </Field>
-        <Field label="Mobile number (login)">
-          <input value={mobile} onChange={(e) => setMobile(e.target.value)} type="tel" inputMode="tel" placeholder="e.g. 050 123 4567" className={cx(inputCls, 'tnum')} />
+        <Field label="Login number">
+          <input value={mobile} onChange={(e) => setMobile(e.target.value)} type="tel" inputMode="tel" placeholder="e.g. 444" className={cx(inputCls, 'tnum')} />
         </Field>
         <Field label={isNew ? 'Password' : 'New password'} hint={isNew ? 'The barber signs in with their number and this password.' : 'Leave empty to keep the current password.'}>
           <div className="relative">

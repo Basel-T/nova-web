@@ -44,12 +44,14 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const submitPhone = async (e: FormEvent) => {
     e.preventDefault();
     const number = cleanNumber(mobile);
-    if (number.length < 7) return fail('Please enter a valid mobile number');
+    if (number.length < 3) return fail('Please enter your mobile number');
     setBusy(true);
     setError('');
     try {
       const user = await findUserByMobile(number);
-      if (!user) go('name');
+      // Short numbers are only for staff accounts — new clients need a real number
+      if (!user && number.length < 7) fail('Please enter a valid mobile number');
+      else if (!user) go('name');
       else if (user.role === 'client') {
         saveSession({ user });
         onLogin(user);
