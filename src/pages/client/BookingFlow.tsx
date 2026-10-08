@@ -21,13 +21,14 @@ import {
   getSettings,
   getStylistById,
   getStylists,
+  getUserUpcoming,
   isDayOff,
   lastBookableDate,
   nextAvailable,
   useStoreVersion,
 } from '../../store';
 import { Avatar, Button, Card, DateStrip, EmptyState, IconButton, Portrait, cx, textareaCls, toast } from '../../ui';
-import { addDays, endTime, formatDuration, formatLongDate, relativeDay, todayStr } from '../../lib/time';
+import { addDays, endTime, toMin, formatDuration, formatLongDate, relativeDay, todayStr } from '../../lib/time';
 
 const STEPS = ['Choose a service', 'Choose your barber', 'Pick a time', 'Review & confirm'];
 
@@ -35,8 +36,14 @@ const STEPS = ['Choose a service', 'Choose your barber', 'Pick a time', 'Review 
 const ANY = 'any';
 
 /** Free start times for one barber, or for "any barber" */
-function startsFor(stylistId: string, date: string, duration: number): string[] {
-  return stylistId === ANY ? getAnyBarberStarts(date, duration) : getAvailableStarts(stylistId, date, duration);
+function startsFor(stylistId: string, date: string, duration: number, userId?: string): string[] {
+  const starts = stylistId === ANY ? getAnyBarberStarts(date, duration) : getAvailableStarts(stylistId, date, duration);
+  if (!userId) return starts;
+  // Hide times that clash with the client's own bookings (they can't be in two chairs)
+  const mine = getUserUpcoming(userId).filter((a) => a.date === date);
+  return starts.filter((t) =>
+    mine.every((a) => toMin(t) + duration <= toMin(a.time) || toMin(t) >= toMin(a.time) + a.duration_min)
+  );
 }
 
 /** First date & time that has a free slot (one barber or any) */
@@ -184,6 +191,7 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
         {current === 1 && service && <BarberStep duration={service.duration_min} selected={stylistId} onChoose={chooseBarber} />}
         {current === 2 && service && (isAny || stylist) && (
           <TimeStep
+            userId={user.id}
             stylistId={isAny ? ANY : stylist!.id}
             duration={service.duration_min}
             date={date || todayStr()}
@@ -375,6 +383,7 @@ function BarberStep({
 }
 
 function TimeStep({
+  userId,
   stylistId,
   duration,
   date,
@@ -382,6 +391,7 @@ function TimeStep({
   onDate,
   onTime,
 }: {
+  userId: string;
   stylistId: string;
   duration: number;
   date: string;
@@ -398,11 +408,11 @@ function TimeStep({
   const items = days.map((d) => {
     const closed = !getHoursFor(d);
     const off = !isAny && isDayOff(stylistId, d);
-    const free = closed || off ? 0 : startsFor(stylistId, d, duration).length;
+    const free = closed || off ? 0 : startsFor(stylistId, d, duration, userId).length;
     return { date: d, disabled: free === 0, note: closed ? 'Closed' : off ? 'Off' : free === 0 ? 'Full' : undefined };
   });
 
-  const starts = startsFor(stylistId, date, duration);
+  const starts = startsFor(stylistId, date, duration, userId);
   const groups = [
     { label: 'Morning', times: starts.filter((t) => t < '12:00') },
     { label: 'Afternoon', times: starts.filter((t) => t >= '12:00' && t < '17:00') },

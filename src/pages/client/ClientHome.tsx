@@ -153,7 +153,7 @@ function LimitSheet({ open, onClose, userId }: { open: boolean; onClose: () => v
           <CalendarClock className="mt-0.5 size-5 shrink-0 text-amber-300" />
           <p className="text-sm leading-relaxed text-amber-50/90">
             You already have <strong>{upcoming.length}</strong> upcoming booking{upcoming.length === 1 ? '' : 's'}. The shop allows up to{' '}
-            <strong>{max}</strong> at a time, so you can book again after one of them has taken place — or cancel one below on your home screen.
+            <strong>{max}</strong> at a time, so you can book again once one of them has taken place — or cancel one from your home screen.
           </p>
         </div>
         <ul className="space-y-2">
@@ -283,7 +283,7 @@ function Home({
         {team.length > 0 && (
           <section>
             <SectionTitle>The team</SectionTitle>
-            <div className="scrollbar-hide -mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-1">
+            <div className="scrollbar-hide -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1">
               {team.map((s) => (
                 <button key={s.id} onClick={() => onBook({ stylistId: s.id })} className="group w-[150px] shrink-0 snap-start text-left">
                   <Portrait name={s.name} src={s.image} className="rounded-3xl border border-white/[0.07] transition group-hover:border-gold-400/40" />
