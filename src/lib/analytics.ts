@@ -146,7 +146,7 @@ export interface Metrics {
   noShow: number;
   upcoming: number;
   avgTicket: number;
-  clients: number;        // unique clients (not cancelled)
+  clients: number;        // unique clients served (completed visits)
   newClients: number;     // sign-ups in the period
   returning: number;      // clients who had visited before the period
   cancelRate: number;     // 0..1
@@ -165,7 +165,8 @@ export function computeMetrics(appts: Appointment[], history: Appointment[], use
   const revenue = done.reduce((s, a) => s + a.price, 0);
   const cancelled = appts.filter((a) => a.status === 'cancelled').length;
   const noShow = appts.filter((a) => a.status === 'no_show').length;
-  const clientIds = new Set(appts.filter((a) => a.status !== 'cancelled').map((a) => a.user_id));
+  // "Served" = clients with at least one COMPLETED visit in the period
+  const clientIds = new Set(done.map((a) => a.user_id));
   const returning = [...clientIds].filter((id) =>
     history.some((a) => a.user_id === id && a.status === 'completed' && a.date < p.start)
   ).length;

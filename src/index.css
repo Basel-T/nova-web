@@ -58,7 +58,7 @@
     40%, 80% { transform: translateX(7px); }
   }
   @keyframes toast {
-    from { opacity: 0; transform: translateY(-12px) scale(0.98); }
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
     to { opacity: 1; transform: none; }
   }
 }

@@ -24,7 +24,6 @@ import {
 import type { Appointment, Stylist, User } from '../../types';
 import {
   addBlock,
-  blockRange,
   formatPrice,
   getAppointmentsForStylist,
   getBlocks,
@@ -33,7 +32,8 @@ import {
   getStylistByMobile,
   getUserById,
   isDayOff,
-  removeBlock,
+  removeBlocks,
+  getMergedBlocks,
   setDayOff,
   updateAppointmentStatus,
   useStoreVersion,
@@ -169,18 +169,17 @@ function Agenda({ stylist, pendingCount, onRequests }: { stylist: Stylist; pendi
   const appts = getAppointmentsForStylist(stylist.id, date).sort(byTime);
   const live = appts.filter((a) => a.status !== 'cancelled');
   const cancelled = appts.filter((a) => a.status === 'cancelled');
-  const blocks = getBlocks(stylist.id, date);
+  const blocks = getMergedBlocks(stylist.id, date); // 19:00–19:30 + 19:30–20:00 → one row
   const hours = getHoursFor(date);
   const dayOff = isDayOff(stylist.id, date);
-  const takings = live.filter((a) => a.status !== 'no_show').reduce((s, a) => s + a.price, 0);
+  // One rule everywhere: revenue = completed only; not-yet-completed = expected
+  const earned = live.filter((a) => a.status === 'completed').reduce((s, a) => s + a.price, 0);
+  const expected = live.filter((a) => a.status === 'pending' || a.status === 'booked').reduce((s, a) => s + a.price, 0);
 
   type Item = { kind: 'appt'; at: number; appt: Appointment } | { kind: 'block'; at: number; end: number; note: string; id: string };
   const items: Item[] = [
     ...live.map((a) => ({ kind: 'appt' as const, at: toMin(a.time), appt: a })),
-    ...blocks.map((b) => {
-      const r = blockRange(b);
-      return { kind: 'block' as const, at: r.start, end: r.end, note: b.note, id: b.id };
-    }),
+    ...blocks.map((b) => ({ kind: 'block' as const, at: b.start, end: b.end, note: b.note, id: b.ids.join('+') })),
   ].sort((a, b) => a.at - b.at);
 
   return (
@@ -188,6 +187,9 @@ function Agenda({ stylist, pendingCount, onRequests }: { stylist: Stylist; pendi
       <div>
         <p className="text-sm text-ink-400">{relativeDay(date)}</p>
         <h1 className="font-display text-[40px] leading-none text-cream">{formatLongDate(date)}</h1>
+        <p className="tnum mt-2 text-xs text-ink-400">
+          {dayOff ? 'Day off' : hours ? `Shop open ${hours.open} – ${hours.close}` : 'Shop closed'}
+        </p>
       </div>
 
       <DateStrip items={strip} value={date} onChange={setDate} />
@@ -207,8 +209,8 @@ function Agenda({ stylist, pendingCount, onRequests }: { stylist: Stylist; pendi
 
       <div className="grid grid-cols-3 gap-2.5">
         <MiniStat label="Bookings" value={String(live.length)} />
-        <MiniStat label="Takings" value={formatPrice(takings)} />
-        <MiniStat label="Hours" value={dayOff ? 'Off' : hours ? `${hours.open}–${hours.close}` : 'Closed'} small />
+        <MiniStat label="Earned" value={formatPrice(earned)} />
+        <MiniStat label="Expected" value={formatPrice(expected)} />
       </div>
 
       {dayOff ? (
@@ -340,24 +342,49 @@ export function AppointmentActions({ appt }: { appt: Appointment }) {
     );
   }
 
+  // A booking that has already started can't be cancelled — it already happened
+  const started = new Date(`${appt.date}T${appt.time}:00`).getTime() <= Date.now();
+
+  if (appt.status === 'completed') {
+    // Auto-completed (or completed by mistake) → still allow correcting to No-show
+    return (
+      <Button
+        size="sm"
+        variant="subtle"
+        loading={busy === 'no_show'}
+        onClick={() =>
+          run('no_show', 'Changed to no-show', {
+            title: 'Change to no-show?',
+            message: `${client} didn't turn up. The ${formatPrice(appt.price)} will no longer count as revenue.`,
+            confirmText: 'No-show',
+          })
+        }
+      >
+        Mark no-show
+      </Button>
+    );
+  }
+
   if (appt.status === 'booked') {
     return (
       <>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="text-rose-300 hover:text-rose-200"
-          loading={busy === 'cancelled'}
-          onClick={() =>
-            run('cancelled', 'Booking cancelled', {
-              title: 'Cancel this booking?',
-              message: `${client}'s ${appt.service_name} on ${formatLongDate(appt.date)} at ${appt.time} will be cancelled.`,
-              confirmText: 'Cancel booking',
-            })
-          }
-        >
-          Cancel
-        </Button>
+        {!started && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-rose-300 hover:text-rose-200"
+            loading={busy === 'cancelled'}
+            onClick={() =>
+              run('cancelled', 'Booking cancelled', {
+                title: 'Cancel this booking?',
+                message: `${client}'s ${appt.service_name} on ${formatLongDate(appt.date)} at ${appt.time} will be cancelled.`,
+                confirmText: 'Cancel booking',
+              })
+            }
+          >
+            Cancel
+          </Button>
+        )}
         {appt.date <= today && (
           <>
             <Button
@@ -431,7 +458,7 @@ function TimeOff({ stylist }: { stylist: Stylist }) {
 
   const hours = getHoursFor(date);
   const off = isDayOff(stylist.id, date);
-  const blocks = getBlocks(stylist.id, date);
+  const blocks = getMergedBlocks(stylist.id, date);
   const bookedThatDay = getAppointmentsForStylist(stylist.id, date).filter((a) => a.status === 'pending' || a.status === 'booked');
 
   const toggleDay = async (v: boolean) => {
@@ -489,19 +516,18 @@ function TimeOff({ stylist }: { stylist: Stylist }) {
               ) : (
                 <ul className="divide-y divide-white/[0.05]">
                   {blocks.map((b) => {
-                    const r = blockRange(b);
                     return (
-                      <li key={b.id} className="flex items-center gap-3 py-3">
+                      <li key={b.ids.join('+')} className="flex items-center gap-3 py-3">
                         <Coffee className="size-4 text-gold-300" />
                         <span className="tnum text-cream">
-                          {fromMin(r.start)} – {fromMin(r.end)}
+                          {fromMin(b.start)} – {fromMin(b.end)}
                         </span>
-                        <span className="flex-1 truncate text-sm text-ink-400">{b.note}</span>
+                        <span className="flex-1 truncate text-sm text-ink-400">{b.note || 'Blocked'}</span>
                         <IconButton
                           label="Remove"
                           onClick={async () => {
                             try {
-                              await removeBlock(b.id);
+                              await removeBlocks(b.ids);
                               toast('Time reopened');
                             } catch {
                               toast('Could not save', 'error');

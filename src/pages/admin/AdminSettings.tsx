@@ -90,9 +90,12 @@ export default function AdminSettings({ user }: { user: User }) {
                 >
                   <span className={cx('absolute top-1 size-4 rounded-full bg-white transition-all', h ? 'left-5' : 'left-1')} />
                 </button>
-                <span className={cx('w-24 shrink-0 text-sm', h ? 'text-cream' : 'text-ink-500')}>{WEEKDAYS[day]}</span>
+                <span className={cx('w-10 shrink-0 text-sm sm:w-24', h ? 'text-cream' : 'text-ink-400')}>
+                  <span className="sm:hidden">{WEEKDAYS[day].slice(0, 3)}</span>
+                  <span className="hidden sm:inline">{WEEKDAYS[day]}</span>
+                </span>
                 {h ? (
-                  <div className="flex flex-1 items-center gap-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
                     <TimeSelect value={h.open} onChange={(v) => setDay(day, { ...h, open: v })} />
                     <span className="text-ink-500">–</span>
                     <TimeSelect value={h.close} onChange={(v) => setDay(day, { ...h, close: v })} />
@@ -182,11 +185,17 @@ function Section({ icon: Icon, title, children }: { icon: typeof Store; title: s
 function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const options = HOUR_OPTIONS.includes(value) ? HOUR_OPTIONS : [value, ...HOUR_OPTIONS].sort();
   return (
-    <Select value={value} onChange={(e) => onChange(e.target.value)} className="flex-1 [&_select]:h-10 [&_select]:px-3 [&_select]:text-sm">
+    // Plain compact select (no chevron padding) so "10:00" always fits on a 375px phone
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label="Time"
+      className={cx(inputCls, 'tnum h-10 w-0 min-w-[64px] flex-1 cursor-pointer appearance-none px-1 text-center text-sm')}
+    >
       {options.map((t) => (
         <option key={t}>{t}</option>
       ))}
-    </Select>
+    </select>
   );
 }
 

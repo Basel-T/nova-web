@@ -68,7 +68,7 @@ export default function AdminBookings() {
       <div className="grid grid-cols-3 gap-2.5">
         <Tile label="Today" value={String(todayCount)} />
         <Tile label="To confirm" value={String(pending)} accent={pending > 0} />
-        <Tile label="Upcoming" value={formatPrice(expected)} />
+        <Tile label="Expected" value={formatPrice(expected)} />
       </div>
 
       <Segmented<When>

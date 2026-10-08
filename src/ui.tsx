@@ -731,9 +731,10 @@ export function Toaster() {
     () => toasts
   );
   return createPortal(
+    // Bottom of the screen, above the bottom menu / booking button — never covers the header or logo
     <div
-      className="pointer-events-none fixed inset-x-0 top-0 z-[70] flex flex-col items-center gap-2 px-4 pt-3"
-      style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+      className="pointer-events-none fixed inset-x-0 z-[70] flex flex-col items-center gap-2 px-4"
+      style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom))' }}
     >
       {list.map((t) => (
         <div

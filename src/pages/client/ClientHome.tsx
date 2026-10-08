@@ -225,7 +225,7 @@ function Home({
         {team.length > 0 && (
           <section>
             <SectionTitle>The team</SectionTitle>
-            <div className="scrollbar-hide -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1">
+            <div className="scrollbar-hide -mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-1">
               {team.map((s) => (
                 <button key={s.id} onClick={() => onBook({ stylistId: s.id })} className="group w-[150px] shrink-0 snap-start text-left">
                   <Portrait name={s.name} src={s.image} className="rounded-3xl border border-white/[0.07] transition group-hover:border-gold-400/40" />
