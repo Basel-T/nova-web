@@ -3,10 +3,11 @@
 // ============================================================
 
 import { useState, type ReactNode } from 'react';
-import { CalendarClock, KeyRound, Store } from 'lucide-react';
+import { CalendarClock, KeyRound, RotateCcw, Store } from 'lucide-react';
 import type { DayHours, Settings, User } from '../../types';
-import { adminSetPassword, getSettings, saveSettings, useStoreVersion } from '../../store';
-import { Button, Card, Field, Select, Toggle, cx, inputCls, toast } from '../../ui';
+import { adminSetPassword, getSettings, resetDemo, saveSettings, useStoreVersion } from '../../store';
+import { Button, Card, Field, Select, Toggle, confirmDialog, cx, inputCls, toast } from '../../ui';
+import { DEMO_MODE } from '../../config';
 import { WEEKDAYS, formatDuration, timeOptions, toMin } from '../../lib/time';
 
 const CURRENCIES = ['$', '€', '£', '₪', 'AED', 'SAR', 'QAR', 'KWD', 'JOD', 'EGP', 'TRY', '₹', 'CHF', 'CA$', 'A$', '¥'];
@@ -149,6 +150,8 @@ export default function AdminSettings({ user }: { user: User }) {
 
       <PasswordCard user={user} />
 
+      {DEMO_MODE && <ResetDemoCard onDone={() => setDraft(getSettings())} />}
+
       {/* Save bar */}
       <div className={cx('sticky z-20 transition-all duration-300', dirty ? 'opacity-100' : 'pointer-events-none translate-y-4 opacity-0')} style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom))' }}>
         <div className="flex items-center gap-3 rounded-2xl border border-gold-400/25 bg-ink-850/95 p-3 pl-4 shadow-2xl backdrop-blur-xl">
@@ -184,6 +187,47 @@ function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) 
         <option key={t}>{t}</option>
       ))}
     </Select>
+  );
+}
+
+/** Demo only: wipe everything testers did and restore the demo shop */
+function ResetDemoCard({ onDone }: { onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+
+  const reset = async () => {
+    const ok = await confirmDialog({
+      title: 'Reset the demo?',
+      message:
+        'Are you sure? This deletes ALL bookings, blocked times, the activity log and every client except the demo client, and restores the demo barbers, services, hours and settings. Staff passwords go back to 12345. This cannot be undone.',
+      confirmText: 'Yes, reset',
+      cancelText: 'Cancel',
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await resetDemo();
+      onDone();
+      toast('Demo reset — fresh shop ready');
+    } catch (e) {
+      toast(`Could not reset: ${(e as Error).message}`, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="space-y-3 border-rose-400/20 p-5">
+      <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-200/80">
+        <RotateCcw className="size-4" /> Demo
+      </p>
+      <p className="text-sm text-ink-300">
+        Clean up after testers: removes all bookings, clients and activity and restores the original demo shop. Barber photos are kept.
+      </p>
+      <Button variant="danger" className="w-full" loading={busy} icon={<RotateCcw className="size-4" />} onClick={reset}>
+        Reset demo
+      </Button>
+    </Card>
   );
 }
 

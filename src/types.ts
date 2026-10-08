@@ -102,6 +102,7 @@ export interface Settings {
   booking_window_days: number;             // how far ahead clients can book
   min_notice_min: number;                  // minimum notice before a booking
   auto_confirm: boolean;                   // true = skip the barber's approval
+  max_upcoming: number;                    // max upcoming bookings per client (1–3)
 }
 
 /** One entry in the shop's activity log */

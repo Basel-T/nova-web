@@ -59,6 +59,7 @@ export const DEFAULT_SETTINGS: Settings = {
   booking_window_days: 30,
   min_notice_min: 0,
   auto_confirm: false,
+  max_upcoming: 2,
 };
 
 interface Cache {
@@ -160,6 +161,7 @@ async function fetchActivity(): Promise<void> {
 export async function refreshAll(): Promise<void> {
   await Promise.all([...TABLES.map(fetchTable), ...(activityEnabled ? [fetchActivity()] : [])]);
   emitChange();
+  autoCompletePastBookings().catch(console.error);
 }
 
 let initialized = false;
@@ -261,6 +263,7 @@ export async function staffLogin(mobile: string, password: string): Promise<User
   logActivity('staff_login', `${user.full_name} signed in`, {
     stylist_id: user.role === 'stylist' ? getStylistByMobile(user.mobile_number)?.id : undefined,
   });
+  autoCompletePastBookings().catch(console.error);
   return user;
 }
 
@@ -284,6 +287,15 @@ export async function adminSetPassword(userId: string, password: string): Promis
   if (error) throw new Error(error.message);
 }
 
+/** Admin (demo mode): wipe bookings & activity, restore demo data (supabase/update-3.sql) */
+export async function resetDemo(): Promise<void> {
+  const token = getSession()?.token;
+  if (!token) throw new Error('Please sign in again');
+  const { error } = await db().rpc('reset_demo', { p_token: token });
+  if (error) throw new Error(error.message);
+  await refreshAll();
+}
+
 // ============================================================
 // ACTIVITY LOG
 // ============================================================
@@ -292,18 +304,18 @@ export async function adminSetPassword(userId: string, password: string): Promis
 export function logActivity(
   type: string,
   message: string,
-  extra: { stylist_id?: string | null; appointment_id?: string | null; amount?: number | null } = {}
+  extra: { stylist_id?: string | null; appointment_id?: string | null; amount?: number | null; system?: boolean } = {}
 ): void {
   if (!supabase) return;
-  const actor = currentUser();
+  const actor = extra.system ? null : currentUser();
   const row: ActivityEvent = {
     id: newId('ev'),
     created_at: new Date().toISOString(),
     type,
     message,
     actor_id: actor?.id ?? null,
-    actor_name: actor?.full_name ?? null,
-    actor_role: actor?.role ?? null,
+    actor_name: extra.system ? 'System' : actor?.full_name ?? null,
+    actor_role: extra.system ? 'system' : actor?.role ?? null,
     stylist_id: extra.stylist_id ?? null,
     appointment_id: extra.appointment_id ?? null,
     amount: extra.amount ?? null,
@@ -354,6 +366,7 @@ const SETTING_LABELS: Partial<Record<keyof Settings, string>> = {
   booking_window_days: 'booking window',
   min_notice_min: 'minimum notice',
   auto_confirm: 'auto-confirm',
+  max_upcoming: 'max upcoming bookings',
 };
 
 export async function saveSettings(patch: Partial<Settings>): Promise<void> {
@@ -677,6 +690,16 @@ export async function addAppointment(
   if (!service) throw new Error('Service not found');
 
   await Promise.all([fetchTable('appointments'), fetchTable('blocked_slots')]);
+  if (hasReachedBookingLimit(userId)) {
+    emitChange();
+    throw new Error('LIMIT');
+  }
+  // A client can't be in two chairs at once
+  const start = toMin(time);
+  const clash = getUserUpcoming(userId).some(
+    (a) => a.date === date && start < toMin(a.time) + a.duration_min && start + service.duration_min > toMin(a.time)
+  );
+  if (clash) throw new Error('CLIENT_OVERLAP');
   if (!getAvailableStarts(stylistId, date, service.duration_min).includes(time)) {
     emitChange();
     throw new Error('SLOT_TAKEN');
@@ -745,12 +768,59 @@ export async function updateAppointmentStatus(id: string, status: AppointmentSta
     );
 }
 
-/** The client's single upcoming (pending/booked) booking */
-export function getUserActiveFutureBooking(userId: string): Appointment | undefined {
+/** The client's upcoming (pending/confirmed) bookings, soonest first */
+export function getUserUpcoming(userId: string): Appointment[] {
   const today = todayStr();
   return cache.appointments
     .filter((a) => a.user_id === userId && a.date >= today && isActive(a))
-    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))[0];
+    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+}
+
+/** The client's next upcoming booking */
+export function getUserActiveFutureBooking(userId: string): Appointment | undefined {
+  return getUserUpcoming(userId)[0];
+}
+
+/** Has the client reached the shop's "max upcoming bookings" limit? */
+export function hasReachedBookingLimit(userId: string): boolean {
+  return getUserUpcoming(userId).length >= getSettings().max_upcoming;
+}
+
+/**
+ * Confirmed bookings whose end time has passed are marked Completed, so the
+ * money counts as revenue. Runs whenever a staff member loads/refreshes the
+ * app. Barbers can still change a completed visit to No-show afterwards.
+ */
+let autoCompleting = false;
+export async function autoCompletePastBookings(): Promise<number> {
+  const role = currentUser()?.role;
+  if ((role !== 'admin' && role !== 'stylist') || autoCompleting || !supabase) return 0;
+  const now = Date.now();
+  const due = cache.appointments.filter(
+    (a) => a.status === 'booked' && new Date(`${a.date}T${a.time}:00`).getTime() + a.duration_min * 60000 <= now
+  );
+  if (due.length === 0) return 0;
+  autoCompleting = true;
+  try {
+    const ids = due.map((a) => a.id);
+    const stamp = new Date().toISOString();
+    cache.appointments = cache.appointments.map((a) =>
+      ids.includes(a.id) ? { ...a, status: 'completed' as const, updated_at: stamp } : a
+    );
+    emitChange();
+    await write(db().from('appointments').update({ status: 'completed', updated_at: stamp }).in('id', ids).eq('status', 'booked'));
+    for (const a of due) {
+      logActivity('booking_completed', `Completed automatically after it ended: ${describe(a)} · ${formatPrice(a.price)}`, {
+        stylist_id: a.stylist_id,
+        appointment_id: a.id,
+        amount: a.price,
+        system: true,
+      });
+    }
+    return due.length;
+  } finally {
+    autoCompleting = false;
+  }
 }
 
 /** All of a client's appointments, newest first */
@@ -794,6 +864,45 @@ export function getBlocks(stylistId: string, date: string): BlockedSlot[] {
   return cache.blocked_slots
     .filter((b) => b.stylist_id === stylistId && b.date === date && b.time !== null)
     .sort((a, b) => toMin(a.time!) - toMin(b.time!));
+}
+
+/** Blocked time with touching/overlapping ranges merged (19:00–19:30 + 19:30–20:00 → 19:00–20:00) */
+export interface MergedBlock extends Range {
+  note: string;
+  ids: string[];
+}
+
+export function getMergedBlocks(stylistId: string, date: string): MergedBlock[] {
+  const out: MergedBlock[] = [];
+  for (const b of getBlocks(stylistId, date)) {
+    const r = blockRange(b);
+    const last = out[out.length - 1];
+    if (last && r.start <= last.end) {
+      last.end = Math.max(last.end, r.end);
+      last.ids.push(b.id);
+      if (b.note && !last.note.split(' · ').includes(b.note)) last.note = last.note ? `${last.note} · ${b.note}` : b.note;
+    } else {
+      out.push({ start: r.start, end: r.end, note: b.note, ids: [b.id] });
+    }
+  }
+  return out;
+}
+
+/** Reopen a whole merged block (removes every piece it is made of) */
+export async function removeBlocks(ids: string[]): Promise<void> {
+  const pieces = cache.blocked_slots.filter((x) => ids.includes(x.id) && x.time !== null);
+  if (pieces.length === 0) return;
+  cache.blocked_slots = cache.blocked_slots.filter((x) => !ids.includes(x.id));
+  emitChange();
+  await write(db().from('blocked_slots').delete().in('id', ids));
+  const ranges = pieces.map(blockRange);
+  const first = pieces[0];
+  const name = getStylistById(first.stylist_id)?.name ?? 'A barber';
+  logActivity(
+    'time_unblocked',
+    `${name} reopened ${fromMin(Math.min(...ranges.map((r) => r.start)))}–${fromMin(Math.max(...ranges.map((r) => r.end)))} on ${formatShortDate(first.date)}`,
+    { stylist_id: first.stylist_id }
+  );
 }
 
 export function isDayOff(stylistId: string, date: string): boolean {
