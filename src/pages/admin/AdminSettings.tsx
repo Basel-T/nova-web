@@ -132,7 +132,16 @@ export default function AdminSettings({ user }: { user: User }) {
             </Select>
           </Field>
         </div>
-        <Field label="Minimum notice" hint="Stops last-minute bookings you can't prepare for.">
+        <Field label="Max upcoming bookings per client" hint="How many future appointments one client can hold at the same time.">
+          <Select value={draft.max_upcoming} onChange={(e) => set({ max_upcoming: Number(e.target.value) })}>
+            {[1, 2, 3].map((n) => (
+              <option key={n} value={n}>
+                {n} booking{n === 1 ? '' : 's'}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Minimum notice" hint="Keep at None so walk-ins can book a slot that starts in a few minutes.">
           <Select value={draft.min_notice_min} onChange={(e) => set({ min_notice_min: Number(e.target.value) })}>
             {[0, 15, 30, 60, 120, 240, 720, 1440].map((m) => (
               <option key={m} value={m}>

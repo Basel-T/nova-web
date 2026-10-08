@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import {
+  CalendarClock,
   CalendarPlus,
   Check,
   ChevronRight,
@@ -26,7 +27,8 @@ import {
   getSettings,
   getStylistById,
   getStylists,
-  getUserActiveFutureBooking,
+  getUserUpcoming,
+  hasReachedBookingLimit,
   getUserAppointments,
   formatPrice,
   isActive,
@@ -70,6 +72,7 @@ interface BookingState {
 export default function ClientApp({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [booking, setBooking] = useState<BookingState | null>(null);
   const [justBooked, setJustBooked] = useState<string | null>(null);
+  const [limitOpen, setLimitOpen] = useState(false);
 
   // Browser back/forward moves between booking steps
   useEffect(() => {
@@ -84,8 +87,8 @@ export default function ClientApp({ user, onLogout }: { user: User; onLogout: ()
   }, []);
 
   const openBooking = (preset: { serviceId?: string; stylistId?: string }) => {
-    if (getUserActiveFutureBooking(user.id)) {
-      toast('You already have an upcoming appointment', 'info');
+    if (hasReachedBookingLimit(user.id)) {
+      setLimitOpen(true); // clear on-screen explanation, not just a toast
       return;
     }
     const step = preset.serviceId ? 1 : 0;
@@ -125,13 +128,49 @@ export default function ClientApp({ user, onLogout }: { user: User; onLogout: ()
   }
 
   return (
-    <Home
-      user={user}
-      onBook={openBooking}
-      onLogout={onLogout}
-      justBooked={justBooked}
-      onDismissBooked={() => setJustBooked(null)}
-    />
+    <>
+      <Home
+        user={user}
+        onBook={openBooking}
+        onLogout={onLogout}
+        justBooked={justBooked}
+        onDismissBooked={() => setJustBooked(null)}
+      />
+      <LimitSheet open={limitOpen} onClose={() => setLimitOpen(false)} userId={user.id} />
+    </>
+  );
+}
+
+/** Shown when the client already holds the maximum number of upcoming bookings */
+function LimitSheet({ open, onClose, userId }: { open: boolean; onClose: () => void; userId: string }) {
+  useStoreVersion();
+  const max = getSettings().max_upcoming;
+  const upcoming = getUserUpcoming(userId);
+  return (
+    <Sheet open={open} onClose={onClose} title="Booking limit reached">
+      <div className="space-y-4">
+        <div className="flex gap-3 rounded-2xl border border-amber-300/20 bg-amber-400/[0.07] p-4">
+          <CalendarClock className="mt-0.5 size-5 shrink-0 text-amber-300" />
+          <p className="text-sm leading-relaxed text-amber-50/90">
+            You already have <strong>{upcoming.length}</strong> upcoming booking{upcoming.length === 1 ? '' : 's'}. The shop allows up to{' '}
+            <strong>{max}</strong> at a time, so you can book again after one of them has taken place — or cancel one below on your home screen.
+          </p>
+        </div>
+        <ul className="space-y-2">
+          {upcoming.map((a) => (
+            <li key={a.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-sm">
+              <span className="min-w-0 truncate text-cream">{a.service_name}</span>
+              <span className="tnum shrink-0 text-ink-300">
+                {relativeDay(a.date)} · {a.time}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <Button variant="gold" className="w-full" onClick={onClose}>
+          Got it
+        </Button>
+      </div>
+    </Sheet>
   );
 }
 
@@ -156,7 +195,9 @@ function Home({
   const [accountOpen, setAccountOpen] = useState(false);
   const settings = getSettings();
   const today = todayStr();
-  const upcoming = getUserActiveFutureBooking(user.id);
+  const upcomingList = getUserUpcoming(user.id);
+  const upcoming = upcomingList[0];
+  const canBookMore = upcomingList.length < settings.max_upcoming;
   const visits = getUserAppointments(user.id).filter((a) => !(isActive(a) && a.date >= today));
   const services = getServices();
   const team = getStylists();
@@ -192,7 +233,24 @@ function Home({
 
         {/* Next appointment / booking CTA */}
         <section className="animate-rise" style={{ animationDelay: '60ms' }}>
-          {upcoming ? <UpcomingCard appt={upcoming} /> : <BookCta onBook={() => onBook({})} />}
+          {upcomingList.length === 0 ? (
+            <BookCta onBook={() => onBook({})} />
+          ) : (
+            <div className="space-y-4">
+              {upcomingList.map((a, i) => (
+                <UpcomingCard key={a.id} appt={a} label={i === 0 ? 'Your next visit' : 'Also booked'} />
+              ))}
+              {canBookMore ? (
+                <Button variant="outline" size="lg" className="w-full" icon={<CalendarPlus className="size-[18px]" />} onClick={() => onBook({})}>
+                  Book another appointment
+                </Button>
+              ) : (
+                <p className="text-center text-xs text-ink-400">
+                  You have the maximum of {settings.max_upcoming} upcoming booking{settings.max_upcoming === 1 ? '' : 's'}.
+                </p>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Services */}
@@ -297,7 +355,7 @@ function BookCta({ onBook }: { onBook: () => void }) {
   );
 }
 
-function UpcomingCard({ appt }: { appt: Appointment }) {
+function UpcomingCard({ appt, label = 'Your next visit' }: { appt: Appointment; label?: string }) {
   const settings = getSettings();
   const barber = getStylistById(appt.stylist_id);
   const [busy, setBusy] = useState(false);
@@ -326,7 +384,7 @@ function UpcomingCard({ appt }: { appt: Appointment }) {
     <Card className="relative overflow-hidden p-5">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-gold-400/[0.08] to-transparent" />
       <div className="relative flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gold-300/90">Your next visit</span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gold-300/90">{label}</span>
         <StatusPill status={appt.status} />
       </div>
 

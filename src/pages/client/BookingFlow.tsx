@@ -7,11 +7,13 @@
 // ============================================================
 
 import { useState, type ReactNode } from 'react';
-import { ArrowLeft, Check, Clock, MessageSquare, Sparkles, X } from 'lucide-react';
+import { ArrowLeft, Check, Clock, MessageSquare, Sparkles, Users, X } from 'lucide-react';
 import type { User } from '../../types';
 import {
   addAppointment,
+  firstFreeBarber,
   formatPrice,
+  getAnyBarberStarts,
   getAvailableStarts,
   getHoursFor,
   getServiceById,
@@ -28,6 +30,24 @@ import { Avatar, Button, Card, DateStrip, EmptyState, IconButton, Portrait, cx, 
 import { addDays, endTime, formatDuration, formatLongDate, relativeDay, todayStr } from '../../lib/time';
 
 const STEPS = ['Choose a service', 'Choose your barber', 'Pick a time', 'Review & confirm'];
+
+/** Special barber choice: whoever is free first at the chosen time */
+const ANY = 'any';
+
+/** Free start times for one barber, or for "any barber" */
+function startsFor(stylistId: string, date: string, duration: number): string[] {
+  return stylistId === ANY ? getAnyBarberStarts(date, duration) : getAvailableStarts(stylistId, date, duration);
+}
+
+/** First date & time that has a free slot (one barber or any) */
+function firstFree(stylistId: string, duration: number): { date: string; time: string } | null {
+  if (stylistId !== ANY) return nextAvailable(stylistId, duration);
+  for (let d = todayStr(); d <= lastBookableDate(); d = addDays(d, 1)) {
+    const s = getAnyBarberStarts(d, duration);
+    if (s.length) return { date: d, time: s[0] };
+  }
+  return null;
+}
 
 interface Props {
   user: User;
@@ -51,10 +71,13 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
   const [busy, setBusy] = useState(false);
 
   const service = getServiceById(serviceId);
-  const stylist = getStylistById(stylistId);
+  const isAny = stylistId === ANY;
+  // With "Any barber", the barber is the first one free at the chosen time
+  const stylist =
+    isAny && service && date && time ? firstFreeBarber(date, time, service.duration_min) : getStylistById(stylistId);
 
   // Fall back gracefully if a choice disappeared (e.g. the admin hid a service)
-  const current = !service ? 0 : step >= 2 && !stylist ? 1 : step >= 3 && !time ? 2 : step;
+  const current = !service ? 0 : step >= 2 && !stylist && !isAny ? 1 : step >= 3 && (!time || !stylist) ? 2 : step;
 
   const chooseService = (id: string) => {
     setServiceId(id);
@@ -62,7 +85,7 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
     if (stylistId) {
       // Barber already chosen (from "The team") → straight to their first free day
       const svc = getServiceById(id);
-      setDate(svc ? nextAvailable(stylistId, svc.duration_min)?.date ?? todayStr() : todayStr());
+      setDate(svc ? firstFree(stylistId, svc.duration_min)?.date ?? todayStr() : todayStr());
       onStep(2);
     } else onStep(1);
   };
@@ -70,19 +93,37 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
   const chooseBarber = (id: string, duration: number) => {
     setStylistId(id);
     setTime('');
-    setDate(nextAvailable(id, duration)?.date ?? todayStr());
+    setDate(firstFree(id, duration)?.date ?? todayStr());
     onStep(2);
   };
 
   const confirm = async () => {
     if (!service || !stylist || !date || !time) return;
     setBusy(true);
+    // "Any barber": if the first free barber gets taken meanwhile, try the next one
+    const candidates = isAny
+      ? getStylists().filter((s) => getAvailableStarts(s.id, date, service.duration_min).includes(time))
+      : [stylist];
     try {
-      const appt = await addAppointment(user.id, stylist.id, service.id, date, time, note);
-      onBooked(appt.id);
+      for (const barber of candidates) {
+        try {
+          const appt = await addAppointment(user.id, barber.id, service.id, date, time, note);
+          onBooked(appt.id);
+          return;
+        } catch (e) {
+          if ((e as Error).message !== 'SLOT_TAKEN') throw e;
+        }
+      }
+      toast('Someone just took that time — please pick another', 'error');
+      setTime('');
+      onBack();
     } catch (e) {
-      if ((e as Error).message === 'SLOT_TAKEN') {
-        toast('Someone just took that time — please pick another', 'error');
+      const msg = (e as Error).message;
+      if (msg === 'LIMIT') {
+        toast(`You already have ${settings.max_upcoming} upcoming booking${settings.max_upcoming === 1 ? '' : 's'} — the maximum`, 'error');
+        onClose();
+      } else if (msg === 'CLIENT_OVERLAP') {
+        toast('You already have a booking at that time — pick another time', 'error');
         setTime('');
         onBack();
       } else {
@@ -126,7 +167,12 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
             <SummaryChip onClick={() => onStep(0)}>
               {service.name} · {formatDuration(service.duration_min)} · {formatPrice(service.price)}
             </SummaryChip>
-            {current > 1 && stylist && (
+            {current > 1 && isAny && (
+              <SummaryChip onClick={() => onStep(1)}>
+                <Users className="size-4 text-gold-300" /> Any barber
+              </SummaryChip>
+            )}
+            {current > 1 && !isAny && stylist && (
               <SummaryChip onClick={() => onStep(1)}>
                 <Avatar name={stylist.name} src={stylist.image} size={20} /> {stylist.name}
               </SummaryChip>
@@ -136,9 +182,9 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
 
         {current === 0 && <ServiceStep selected={serviceId} onChoose={chooseService} />}
         {current === 1 && service && <BarberStep duration={service.duration_min} selected={stylistId} onChoose={chooseBarber} />}
-        {current === 2 && service && stylist && (
+        {current === 2 && service && (isAny || stylist) && (
           <TimeStep
-            stylistId={stylist.id}
+            stylistId={isAny ? ANY : stylist!.id}
             duration={service.duration_min}
             date={date || todayStr()}
             time={time}
@@ -156,7 +202,10 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
                 <Avatar name={stylist.name} src={stylist.image} size={64} className="rounded-2xl" />
                 <div className="min-w-0">
                   <p className="font-display text-[26px] leading-tight text-cream">{service.name}</p>
-                  <p className="text-sm text-ink-400">with {stylist.name}</p>
+                  <p className="text-sm text-ink-400">
+                    with {stylist.name}
+                    {isAny && <span className="text-gold-300/90"> · first available</span>}
+                  </p>
                 </div>
               </div>
               <div className="hairline" />
@@ -198,7 +247,7 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
       {current === 2 && (
         <Footer>
           <Button variant="gold" size="lg" className="w-full" disabled={!time} onClick={() => onStep(3)}>
-            {time ? `Continue · ${relativeDay(date)} at ${time}` : 'Select a time'}
+            {time ? `Continue · ${relativeDay(date || todayStr())} at ${time}` : 'Select a time'}
           </Button>
         </Footer>
       )}
@@ -258,8 +307,38 @@ function BarberStep({
 }) {
   const team = getStylists();
   if (team.length === 0) return <EmptyState icon={Clock} title="No barbers available" text="Please check back soon." />;
+  const anyNext = firstFree(ANY, duration);
   return (
     <div className="space-y-3">
+      {/* "Any barber" — first card */}
+      <button
+        onClick={() => onChoose(ANY, duration)}
+        className={cx(
+          'flex w-full items-center gap-4 rounded-3xl border p-3 text-left transition-all active:scale-[0.99]',
+          selected === ANY
+            ? 'border-gold-400/60 bg-gold-400/[0.06]'
+            : 'border-gold-400/25 bg-gradient-to-r from-gold-400/[0.07] to-transparent hover:border-gold-400/45'
+        )}
+      >
+        <div className="grid h-[92px] w-[92px] shrink-0 place-items-center rounded-2xl border border-gold-400/25 bg-ink-850">
+          <Users className="size-8 text-gold-300" strokeWidth={1.4} />
+        </div>
+        <div className="min-w-0 flex-1 py-1 pr-1">
+          <p className="text-[17px] font-medium text-cream">Any barber</p>
+          <p className="text-[13px] text-gold-300/90">Fastest option</p>
+          <p className="mt-1.5 text-[13px] leading-snug text-ink-400">We'll book the first barber who is free at your time.</p>
+          <p
+            className={cx(
+              'mt-2.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px]',
+              anyNext ? 'bg-emerald-400/10 text-emerald-200' : 'bg-white/[0.04] text-ink-400'
+            )}
+          >
+            <span className={cx('size-1.5 rounded-full', anyNext ? 'bg-emerald-300' : 'bg-ink-500')} />
+            {anyNext ? `Next free: ${relativeDay(anyNext.date)} ${anyNext.time}` : 'Fully booked'}
+          </p>
+        </div>
+      </button>
+
       {team.map((s) => {
         const next = nextAvailable(s.id, duration);
         return (
@@ -315,14 +394,15 @@ function TimeStep({
   const days: string[] = [];
   for (let d = today; d <= last; d = addDays(d, 1)) days.push(d);
 
+  const isAny = stylistId === ANY;
   const items = days.map((d) => {
     const closed = !getHoursFor(d);
-    const off = isDayOff(stylistId, d);
-    const free = closed || off ? 0 : getAvailableStarts(stylistId, d, duration).length;
+    const off = !isAny && isDayOff(stylistId, d);
+    const free = closed || off ? 0 : startsFor(stylistId, d, duration).length;
     return { date: d, disabled: free === 0, note: closed ? 'Closed' : off ? 'Off' : free === 0 ? 'Full' : undefined };
   });
 
-  const starts = getAvailableStarts(stylistId, date, duration);
+  const starts = startsFor(stylistId, date, duration);
   const groups = [
     { label: 'Morning', times: starts.filter((t) => t < '12:00') },
     { label: 'Afternoon', times: starts.filter((t) => t >= '12:00' && t < '17:00') },
@@ -341,7 +421,13 @@ function TimeStep({
           <Card>
             <EmptyState
               icon={Clock}
-              title={!getHoursFor(date) ? 'The shop is closed this day' : isDayOff(stylistId, date) ? 'Your barber is off this day' : 'Fully booked'}
+              title={
+                !getHoursFor(date)
+                  ? 'The shop is closed this day'
+                  : !isAny && isDayOff(stylistId, date)
+                    ? 'Your barber is off this day'
+                    : 'Fully booked'
+              }
               text="Try another day."
               action={
                 firstOpen && firstOpen !== date ? (

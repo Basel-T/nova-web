@@ -185,7 +185,17 @@ function Agenda({ stylist, pendingCount, onRequests }: { stylist: Stylist; pendi
   return (
     <div className="animate-rise space-y-5">
       <div>
-        <p className="text-sm text-ink-400">{relativeDay(date)}</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-ink-400">{relativeDay(date)}</p>
+          {date !== today && (
+            <button
+              onClick={() => setDate(today)}
+              className="rounded-full border border-gold-400/40 bg-gold-400/10 px-3 py-1 text-xs font-medium text-gold-200 transition hover:bg-gold-400/15"
+            >
+              Today
+            </button>
+          )}
+        </div>
         <h1 className="font-display text-[40px] leading-none text-cream">{formatLongDate(date)}</h1>
         <p className="tnum mt-2 text-xs text-ink-400">
           {dayOff ? 'Day off' : hours ? `Shop open ${hours.open} – ${hours.close}` : 'Shop closed'}

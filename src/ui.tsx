@@ -518,16 +518,24 @@ export function DateStrip({
   onChange: (date: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const firstScroll = useRef(true);
 
-  // Keep the selected day in view without scrolling the page
+  // Keep the selected day centred without scrolling the page
+  // (instant on first show, so e.g. "today" is visible straight away)
   useLayoutEffect(() => {
     const el = ref.current?.querySelector<HTMLElement>(`[data-date="${value}"]`);
     const box = ref.current;
-    if (el && box) box.scrollTo({ left: el.offsetLeft - box.clientWidth / 2 + el.clientWidth / 2, behavior: 'smooth' });
+    if (el && box) {
+      box.scrollTo({
+        left: el.offsetLeft - box.clientWidth / 2 + el.clientWidth / 2,
+        behavior: firstScroll.current ? 'auto' : 'smooth',
+      });
+      firstScroll.current = false;
+    }
   }, [value]);
 
   return (
-    <div ref={ref} className="scrollbar-hide -mx-4 flex gap-2 overflow-x-auto px-4 py-1">
+    <div ref={ref} className="scrollbar-hide relative -mx-4 flex gap-2 overflow-x-auto px-4 py-1">
       {items.map((d) => {
         const dt = parseDate(d.date);
         const selected = d.date === value;

@@ -993,11 +993,28 @@ export function getAvailableStarts(stylistId: string, date: string, duration: nu
   const candidates = new Set<number>();
   for (let t = open; t + duration <= close; t += settings.slot_interval) candidates.add(t);
   for (const b of busy) if (b.end >= open && b.end + duration <= close) candidates.add(b.end);
+  // Walk-ins: today, also offer the next 5-minute mark (e.g. 10:05 when it's 10:01)
+  if (date === toDateStr(new Date()) && settings.min_notice_min === 0) {
+    const soon = Math.ceil(minStart / 5) * 5;
+    if (soon >= open && soon + duration <= close) candidates.add(soon);
+  }
 
   return [...candidates]
     .filter((t) => t >= minStart && busy.every((b) => t + duration <= b.start || t >= b.end))
     .sort((a, b) => a - b)
     .map(fromMin);
+}
+
+/** "Any barber": every start time at which at least one active barber is free */
+export function getAnyBarberStarts(date: string, duration: number): string[] {
+  const all = new Set<string>();
+  for (const s of getStylists()) for (const t of getAvailableStarts(s.id, date, duration)) all.add(t);
+  return [...all].sort();
+}
+
+/** "Any barber": the first barber (in team order) who is free at that time */
+export function firstFreeBarber(date: string, time: string, duration: number): Stylist | undefined {
+  return getStylists().find((s) => getAvailableStarts(s.id, date, duration).includes(time));
 }
 
 /** First free date & time for a barber (within the booking window) */
