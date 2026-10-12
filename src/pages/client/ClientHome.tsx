@@ -62,7 +62,7 @@ import {
   relativeDay,
   todayStr,
 } from '../../lib/time';
-import { downloadIcs, mapsUrl } from '../../lib/util';
+import { cleanNumber, downloadIcs, mapsUrl } from '../../lib/util';
 import BookingFlow from './BookingFlow';
 import { t } from '../../i18n';
 
@@ -526,7 +526,7 @@ function VisitUs() {
           </a>
         </div>
         {settings.phone && (
-          <a href={`tel:${settings.phone}`} className="mt-4 flex items-center gap-3 text-cream">
+          <a href={`tel:${cleanNumber(settings.phone)}`} className="mt-4 flex items-center gap-3 text-cream">
             <Phone className="size-5 text-gold-300" strokeWidth={1.6} />
             <span className="tnum" dir="ltr">{settings.phone}</span>
           </a>

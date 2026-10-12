@@ -5,22 +5,34 @@
 import { useState, type ReactNode } from 'react';
 import { CalendarClock, KeyRound, RotateCcw, Store } from 'lucide-react';
 import type { DayHours, Settings, User } from '../../types';
-import { adminSetPassword, errorText, getSettings, resetDemo, saveSettings, useStoreVersion } from '../../store';
+import { adminSetPassword, currencyCode, errorText, getSettings, resetDemo, saveSettings, useStoreVersion } from '../../store';
+import { cleanNumber } from '../../lib/util';
 import { Button, Card, Field, LanguageSwitcher, Select, Toggle, confirmDialog, cx, inputCls, toast } from '../../ui';
 import { DEMO_MODE } from '../../config';
 import { WEEK_ORDER, formatDuration, timeOptions, toMin, weekdayName } from '../../lib/time';
-import { t } from '../../i18n';
+import { getLocale, t } from '../../i18n';
 
-const CURRENCIES = ['$', '€', '£', '₪', 'AED', 'SAR', 'QAR', 'KWD', 'JOD', 'EGP', 'TRY', '₹', 'CHF', 'CA$', 'A$', '¥'];
+// ISO codes, euro first; shown with their sign in the active language
+const CURRENCIES = ['EUR', 'GBP', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'RON', 'TRY', 'USD', 'AED', 'SAR'];
+
+function currencyLabel(code: string): string {
+  try {
+    const sign = new Intl.NumberFormat(getLocale(), { style: 'currency', currency: code }).formatToParts(0).find((p) => p.type === 'currency')?.value;
+    return sign && sign !== code ? `${code} (${sign})` : code;
+  } catch {
+    return code;
+  }
+}
 const HOUR_OPTIONS = timeOptions('05:00', '24:00', 30);
 const ORDER = WEEK_ORDER; // Monday first
 
 export default function AdminSettings({ user }: { user: User }) {
   useStoreVersion();
   const saved = getSettings();
-  const [draft, setDraft] = useState<Settings>(saved);
+  // Older versions saved a sign ("$"); show it as its ISO code
+  const [draft, setDraft] = useState<Settings>(() => ({ ...saved, currency: currencyCode(saved.currency) ?? saved.currency }));
   const [saving, setSaving] = useState(false);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
+  const dirty = JSON.stringify(draft) !== JSON.stringify({ ...saved, currency: currencyCode(saved.currency) ?? saved.currency });
   const set = (patch: Partial<Settings>) => setDraft((d) => ({ ...d, ...patch }));
 
   const setDay = (day: number, hours: DayHours | null) => set({ hours: { ...draft.hours, [String(day)]: hours } });
@@ -36,7 +48,7 @@ export default function AdminSettings({ user }: { user: User }) {
     setSaving(true);
     try {
       const { id: _id, ...patch } = draft;
-      await saveSettings({ ...patch, shop_name: draft.shop_name.trim(), tagline: draft.tagline.trim(), address: draft.address.trim(), phone: draft.phone.trim() });
+      await saveSettings({ ...patch, shop_name: draft.shop_name.trim(), tagline: draft.tagline.trim(), address: draft.address.trim(), phone: cleanNumber(draft.phone) });
       toast(t('settings.saved'));
     } catch (e) {
       toast(t('errors.generic'), 'error');
@@ -62,14 +74,17 @@ export default function AdminSettings({ user }: { user: User }) {
         <Field label={t('settings.address')}>
           <input value={draft.address} onChange={(e) => set({ address: e.target.value })} className={inputCls} />
         </Field>
-        <div className="grid grid-cols-[1fr_120px] gap-3">
+        <div className="grid grid-cols-[1fr_9rem] gap-3">
           <Field label={t('csv.phone')}>
-            <input value={draft.phone} onChange={(e) => set({ phone: e.target.value })} type="tel" dir="ltr" placeholder={t('settings.phonePlaceholder')} className={cx(inputCls, 'tnum text-start')} />
+            <input value={draft.phone} onChange={(e) => set({ phone: e.target.value })} type="tel" dir="ltr" placeholder="+44 20 7946 0123" className={cx(inputCls, 'tnum text-start')} />
+            <p className="mt-1.5 text-xs text-ink-400">{t('settings.phonePlaceholder')}</p>
           </Field>
           <Field label={t('settings.currency')}>
             <Select value={draft.currency} onChange={(e) => set({ currency: e.target.value })}>
               {currencies.map((c) => (
-                <option key={c}>{c}</option>
+                <option key={c} value={c}>
+                  {currencyLabel(c)}
+                </option>
               ))}
             </Select>
           </Field>

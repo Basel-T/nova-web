@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Clock, EyeOff, Minus, Plus, Scissors, Trash2 } from 'lucide-react';
 import type { Service } from '../../types';
-import { deleteService, formatPrice, getServices, getSettings, moveService, saveService, useStoreVersion } from '../../store';
+import { currencySymbol, deleteService, formatPrice, getServices, moveService, saveService, useStoreVersion } from '../../store';
 import { Button, Card, EmptyState, Field, IconButton, Sheet, Toggle, confirmDialog, cx, inputCls, textareaCls, toast } from '../../ui';
 import { formatDuration } from '../../lib/time';
 import { t } from '../../i18n';
@@ -77,7 +77,7 @@ function ServiceForm({ draft, onClose }: { draft: Draft; onClose: () => void }) 
   const [priceText, setPriceText] = useState(String(draft.price));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const currency = getSettings().currency;
+  const currency = currencySymbol();
   const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }));
 
   const save = async () => {
