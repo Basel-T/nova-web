@@ -64,7 +64,7 @@ export interface Appointment {
   time: string;           // HH:MM (24h)
   status: AppointmentStatus;
   client_note: string;
-  cancelled_by: 'client' | 'barber' | 'admin' | null;
+  cancelled_by: 'client' | 'barber' | 'admin' | 'system' | null;
   created_at?: string;
   updated_at?: string | null;
 }

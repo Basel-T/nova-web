@@ -17,6 +17,7 @@ import {
 import { Button, Card, EmptyState, Field, Portrait, Sheet, Toggle, confirmDialog, cx, inputCls, textareaCls, toast } from '../../ui';
 import { todayStr } from '../../lib/time';
 import { cleanNumber } from '../../lib/util';
+import { DEMO_ACCOUNTS, DEMO_MODE } from '../../config';
 
 export default function AdminTeam() {
   useStoreVersion();
@@ -74,6 +75,9 @@ export default function AdminTeam() {
 
 function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: () => void }) {
   const isNew = !stylist;
+  // Demo safety: the "Try as Barber" account is locked, and passwords can't be changed
+  const locked = DEMO_MODE && stylist?.mobile_number === DEMO_ACCOUNTS.barber.mobile;
+  const pwLocked = DEMO_MODE && !isNew;
   const [name, setName] = useState(stylist?.name ?? '');
   const [title, setTitle] = useState(stylist?.title ?? 'Barber');
   const [bio, setBio] = useState(stylist?.bio ?? '');
@@ -97,6 +101,7 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
   };
 
   const save = async () => {
+    if (locked) return;
     const number = cleanNumber(mobile);
     if (name.trim().length < 2) return setError('Enter the barber’s name');
     if (number.length < 3) return setError('Enter a login number — the barber uses it to sign in');
@@ -115,7 +120,9 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
       setError(
         msg.includes('duplicate') || msg.includes('unique')
           ? 'That mobile number already belongs to another barber'
-          : msg.includes('authorized')
+          : msg.includes('already')
+            ? msg
+            : msg.includes('authorized')
             ? 'Your admin session expired — sign out and in again'
             : `Could not save: ${msg}`
       );
@@ -124,7 +131,7 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
   };
 
   const remove = async () => {
-    if (!stylist) return;
+    if (!stylist || locked) return;
     const ok = await confirmDialog({
       title: `Remove ${stylist.name}?`,
       message: 'They will disappear from the booking app and lose barber access. Past bookings and analytics are kept.',
@@ -148,6 +155,9 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
       onClose={onClose}
       title={isNew ? 'New barber' : 'Edit barber'}
       footer={
+        locked ? (
+          <p className="py-2 text-center text-sm text-ink-300">Locked in the demo — used by “Try as Barber”.</p>
+        ) : (
         <div className="flex gap-2.5">
           {!isNew && (
             <Button variant="danger" onClick={remove} icon={<Trash2 className="size-4" />}>
@@ -158,9 +168,16 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
             {isNew ? 'Add barber' : 'Save changes'}
           </Button>
         </div>
+        )
       }
     >
-      <div className="space-y-5">
+      {locked && (
+        <p className="mb-5 flex gap-2.5 rounded-2xl border border-gold-400/25 bg-gold-400/[0.07] px-4 py-3 text-sm text-gold-100">
+          <KeyRound className="mt-0.5 size-4 shrink-0 text-gold-300" />
+          {stylist?.name} is the demo barber behind “Try as Barber”, so he can't be edited or removed in the demo. Try editing another barber.
+        </p>
+      )}
+      <fieldset disabled={locked} className="space-y-5 disabled:opacity-60">
         {/* Photo */}
         <div className="flex items-end gap-4">
           <Portrait name={name || 'New barber'} src={shownPhoto} className="w-[120px] shrink-0 rounded-3xl border border-white/[0.08]" />
@@ -198,17 +215,25 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
         <Field label="Login number">
           <input value={mobile} onChange={(e) => setMobile(e.target.value)} type="tel" inputMode="tel" placeholder="e.g. 444" className={cx(inputCls, 'tnum')} />
         </Field>
-        <Field label={isNew ? 'Password' : 'New password'} hint={isNew ? 'The barber signs in with their number and this password.' : 'Leave empty to keep the current password.'}>
-          <div className="relative">
-            <KeyRound className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-ink-500" />
-            <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder={isNew ? 'At least 3 characters' : '••••'} className={cx(inputCls, 'pl-10')} />
-          </div>
-        </Field>
+        {pwLocked ? (
+          <Field label="Password">
+            <p className="flex items-center gap-2.5 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-sm text-ink-300">
+              <KeyRound className="size-4 text-ink-400" /> Disabled in the demo
+            </p>
+          </Field>
+        ) : (
+          <Field label={isNew ? 'Password' : 'New password'} hint={isNew ? 'The barber signs in with their number and this password.' : 'Leave empty to keep the current password.'}>
+            <div className="relative">
+              <KeyRound className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-ink-500" />
+              <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder={isNew ? 'At least 3 characters' : '••••'} className={cx(inputCls, 'pl-10')} />
+            </div>
+          </Field>
+        )}
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
           <Toggle checked={active} onChange={setActive} label="Taking bookings" description="Turn off to hide this barber from clients (e.g. holiday)." />
         </div>
-        {error && <p className="text-sm text-rose-300">{error}</p>}
-      </div>
+      </fieldset>
+      {error && <p className="mt-4 text-sm text-rose-300">{error}</p>}
     </Sheet>
   );
 }

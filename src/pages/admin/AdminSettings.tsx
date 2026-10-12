@@ -270,6 +270,17 @@ function PasswordCard({ user }: { user: User }) {
     }
   };
 
+  // Demo safety: a tester changing this would lock everyone out of "Try as Admin"
+  if (DEMO_MODE) {
+    return (
+      <Section icon={KeyRound} title="Admin password">
+        <p className="flex items-center gap-2.5 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-sm text-ink-300">
+          <KeyRound className="size-4 text-ink-400" /> Disabled in the demo
+        </p>
+      </Section>
+    );
+  }
+
   return (
     <Section icon={KeyRound} title="Admin password">
       <div className="grid grid-cols-2 gap-3">

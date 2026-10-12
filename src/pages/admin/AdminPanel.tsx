@@ -11,9 +11,8 @@
 import { useState } from 'react';
 import { BarChart3, CalendarDays, LogOut, Scissors, Settings2, Users } from 'lucide-react';
 import type { User } from '../../types';
-import { getAppointments, getSettings, useStoreVersion } from '../../store';
+import { getAppointments, getSettings, isStillUpcoming, useStoreVersion } from '../../store';
 import { AppHeader, BottomNav, IconButton, Wordmark, confirmDialog } from '../../ui';
-import { todayStr } from '../../lib/time';
 import Analytics from '../Analytics';
 import AdminBookings from './AdminBookings';
 import AdminTeam from './AdminTeam';
@@ -34,8 +33,7 @@ export default function AdminPanel({ user, onLogout }: { user: User; onLogout: (
   useStoreVersion();
   const [tab, setTab] = useState<Tab>('bookings');
   const settings = getSettings();
-  const today = todayStr();
-  const pending = getAppointments().filter((a) => a.status === 'pending' && a.date >= today).length;
+  const pending = getAppointments().filter((a) => a.status === 'pending' && isStillUpcoming(a)).length;
 
   const signOut = async () => {
     if (await confirmDialog({ title: 'Sign out?', confirmText: 'Sign out', cancelText: 'Stay' })) onLogout();

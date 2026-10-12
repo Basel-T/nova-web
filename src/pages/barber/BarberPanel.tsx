@@ -32,6 +32,7 @@ import {
   getStylistByMobile,
   getUserById,
   isDayOff,
+  isStillUpcoming,
   removeBlocks,
   getMergedBlocks,
   setDayOff,
@@ -80,7 +81,6 @@ export default function BarberPanel({ user, onLogout }: { user: User; onLogout: 
   useStoreVersion();
   const [tab, setTab] = useState<Tab>('agenda');
   const stylist = getStylistByMobile(user.mobile_number);
-  const today = todayStr();
 
   const signOut = async () => {
     if (await confirmDialog({ title: 'Sign out?', confirmText: 'Sign out', cancelText: 'Stay' })) onLogout();
@@ -100,7 +100,7 @@ export default function BarberPanel({ user, onLogout }: { user: User; onLogout: 
   }
 
   const requests = getAppointmentsForStylist(stylist.id)
-    .filter((a) => a.status === 'pending' && a.date >= today)
+    .filter((a) => a.status === 'pending' && isStillUpcoming(a))
     .sort(byTime);
 
   return (

@@ -6,7 +6,7 @@
 // and updates live while the client is choosing.
 // ============================================================
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, Check, Clock, MessageSquare, Sparkles, Users, X } from 'lucide-react';
 import type { User } from '../../types';
 import {
@@ -26,6 +26,7 @@ import {
   lastBookableDate,
   nextAvailable,
   useStoreVersion,
+  willAutoConfirm,
 } from '../../store';
 import { Avatar, Button, Card, DateStrip, EmptyState, IconButton, Portrait, cx, textareaCls, toast } from '../../ui';
 import { addDays, endTime, toMin, formatDuration, formatLongDate, relativeDay, todayStr } from '../../lib/time';
@@ -76,12 +77,33 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
   const [time, setTime] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [stale, setStale] = useState(false); // chosen time disappeared → show a message
+  const submitting = useRef(false);
+  const [, setTick] = useState(0);
+
+  // Re-check every 15 s, so a time that passes while the client waits is noticed
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 15000);
+    return () => clearInterval(id);
+  }, []);
 
   const service = getServiceById(serviceId);
   const isAny = stylistId === ANY;
   // With "Any barber", the barber is the first one free at the chosen time
   const stylist =
     isAny && service && date && time ? firstFreeBarber(date, time, service.duration_min) : getStylistById(stylistId);
+
+  // Is the chosen time still free? (someone else booked it, or it passed)
+  const timeGone =
+    !!service && !!time && step >= 2 && !submitting.current &&
+    !startsFor(stylistId, date || todayStr(), service.duration_min, user.id).includes(time);
+
+  useEffect(() => {
+    if (!timeGone) return;
+    setTime('');
+    setStale(true);
+    if (step >= 3) onBack(); // back to the time list
+  }, [timeGone]);
 
   // Fall back gracefully if a choice disappeared (e.g. the admin hid a service)
   const current = !service ? 0 : step >= 2 && !stylist && !isAny ? 1 : step >= 3 && (!time || !stylist) ? 2 : step;
@@ -107,6 +129,7 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
   const confirm = async () => {
     if (!service || !stylist || !date || !time) return;
     setBusy(true);
+    submitting.current = true;
     // "Any barber": if the first free barber gets taken meanwhile, try the next one
     const candidates = isAny
       ? getStylists().filter((s) => getAvailableStarts(s.id, date, service.duration_min).includes(time))
@@ -116,15 +139,17 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
         try {
           const appt = await addAppointment(user.id, barber.id, service.id, date, time, note);
           onBooked(appt.id);
-          return;
+          return; // stays "submitting" — the flow is closing
         } catch (e) {
           if ((e as Error).message !== 'SLOT_TAKEN') throw e;
         }
       }
-      toast('Someone just took that time — please pick another', 'error');
+      submitting.current = false;
       setTime('');
+      setStale(true);
       onBack();
     } catch (e) {
+      submitting.current = false;
       const msg = (e as Error).message;
       if (msg === 'LIMIT') {
         toast(`You already have ${settings.max_upcoming} upcoming booking${settings.max_upcoming === 1 ? '' : 's'} — the maximum`, 'error');
@@ -196,11 +221,15 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
             duration={service.duration_min}
             date={date || todayStr()}
             time={time}
+            stale={stale}
             onDate={(d) => {
               setDate(d);
               setTime('');
             }}
-            onTime={setTime}
+            onTime={(t) => {
+              setStale(false);
+              setTime(t);
+            }}
           />
         )}
         {current === 3 && service && stylist && (
@@ -244,7 +273,7 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
 
             <p className="flex items-start gap-2.5 text-xs leading-relaxed text-ink-500">
               <Sparkles className="mt-0.5 size-3.5 shrink-0 text-gold-400" />
-              Pay at the shop. {settings.auto_confirm ? 'Your booking is confirmed instantly.' : `${stylist.name.split(' ')[0]} will confirm your request.`} You can
+              Pay at the shop. {willAutoConfirm(date, time) ? 'Your booking is confirmed instantly.' : `${stylist.name.split(' ')[0]} will confirm your request.`} You can
               cancel any time from the app.
             </p>
           </div>
@@ -262,7 +291,7 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
       {current === 3 && (
         <Footer>
           <Button variant="gold" size="lg" className="w-full" loading={busy} icon={!busy && <Check className="size-[18px]" />} onClick={confirm}>
-            {settings.auto_confirm ? 'Confirm booking' : 'Request booking'}
+            {willAutoConfirm(date, time) ? 'Confirm booking' : 'Request booking'}
           </Button>
         </Footer>
       )}
@@ -388,9 +417,11 @@ function TimeStep({
   duration,
   date,
   time,
+  stale,
   onDate,
   onTime,
 }: {
+  stale: boolean;
   userId: string;
   stylistId: string;
   duration: number;
@@ -425,6 +456,13 @@ function TimeStep({
     <div>
       <p className="mb-3 font-display text-[26px] text-cream">{formatLongDate(date)}</p>
       <DateStrip items={items} value={date} onChange={onDate} />
+
+      {stale && (
+        <p role="alert" className="mt-4 flex gap-2.5 rounded-2xl border border-amber-300/25 bg-amber-400/[0.08] px-4 py-3 text-sm text-amber-100">
+          <Clock className="mt-0.5 size-4 shrink-0 text-amber-300" />
+          That time is no longer available — please pick another.
+        </p>
+      )}
 
       <div className="mt-6 space-y-6">
         {groups.length === 0 ? (

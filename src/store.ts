@@ -524,6 +524,9 @@ export type PhotoChange = { kind: 'keep' } | { kind: 'remove' } | { kind: 'uploa
  * 'stylist' exists for that mobile number, sets the password and photo.
  */
 export async function addStylist(input: StylistInput, password: string, photo: PhotoChange): Promise<void> {
+  // Never turn the admin (or another barber's login) into this barber
+  const owner = await findUserByMobile(input.mobile_number);
+  if (owner && owner.role !== 'client') throw new Error('That number is already used by the admin or another barber');
   const id = newId('s');
   const sort = Math.max(0, ...cache.stylists.map((s) => s.sort)) + 1;
   await write(db().from('stylists').insert({ id, ...input, image: null, sort }));
@@ -557,6 +560,10 @@ export async function updateStylist(
 ): Promise<void> {
   const before = getStylistById(id);
   if (!before) throw new Error('Barber not found');
+  if (input.mobile_number !== before.mobile_number) {
+    const owner = await findUserByMobile(input.mobile_number);
+    if (owner) throw new Error('That number already belongs to another account');
+  }
 
   let image = before.image;
   if (photo.kind === 'upload') image = await uploadPhoto(id, photo.file);
@@ -667,6 +674,28 @@ export function getAppointments(): Appointment[] {
 
 export const isActive = (a: Appointment) => a.status === 'pending' || a.status === 'booked';
 
+const startMs = (a: Appointment) => new Date(`${a.date}T${a.time}:00`).getTime();
+const endMs = (a: Appointment) => startMs(a) + a.duration_min * 60000;
+
+/**
+ * Still really upcoming? A pending request whose start time passed (never
+ * confirmed) or a confirmed booking that already ended no longer counts.
+ */
+export function isStillUpcoming(a: Appointment, now = Date.now()): boolean {
+  if (a.status === 'pending') return startMs(a) > now;
+  if (a.status === 'booked') return endMs(a) > now;
+  return false;
+}
+
+/** Bookings starting within this many minutes are confirmed straight away (walk-ins) */
+export const WALK_IN_AUTO_CONFIRM_MIN = 60;
+
+/** Will a booking at this date/time be confirmed instantly? */
+export function willAutoConfirm(date: string, time: string): boolean {
+  if (getSettings().auto_confirm) return true;
+  return new Date(`${date}T${time}:00`).getTime() - Date.now() <= WALK_IN_AUTO_CONFIRM_MIN * 60000;
+}
+
 /** "James Carter's Skin Fade with Leo Vargas · Tue, Oct 6 at 10:00" (barber omitted when they're the one acting) */
 function describe(a: Appointment, withBarber = true): string {
   const client = getUserById(a.user_id)?.full_name ?? 'A client';
@@ -715,7 +744,8 @@ export async function addAppointment(
     duration_min: service.duration_min,
     date,
     time,
-    status: getSettings().auto_confirm ? 'booked' : 'pending',
+    // Walk-ins (starting within 60 min) are confirmed straight away
+    status: willAutoConfirm(date, time) ? 'booked' : 'pending',
     client_note: note.trim(),
     cancelled_by: null,
   };
@@ -770,9 +800,9 @@ export async function updateAppointmentStatus(id: string, status: AppointmentSta
 
 /** The client's upcoming (pending/confirmed) bookings, soonest first */
 export function getUserUpcoming(userId: string): Appointment[] {
-  const today = todayStr();
+  const now = Date.now();
   return cache.appointments
-    .filter((a) => a.user_id === userId && a.date >= today && isActive(a))
+    .filter((a) => a.user_id === userId && isStillUpcoming(a, now))
     .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
 }
 
@@ -787,21 +817,41 @@ export function hasReachedBookingLimit(userId: string): boolean {
 }
 
 /**
- * Confirmed bookings whose end time has passed are marked Completed, so the
- * money counts as revenue. Runs whenever a staff member loads/refreshes the
- * app. Barbers can still change a completed visit to No-show afterwards.
+ * Housekeeping, run whenever a staff member loads/refreshes the app:
+ *  • Confirmed bookings whose end time has passed → Completed (money counts as
+ *    revenue; barbers can still change it to No-show afterwards).
+ *  • Pending requests whose start time passed without a confirmation →
+ *    Cancelled by 'system' ("Not confirmed in time"), freeing the client's limit.
  */
 let autoCompleting = false;
 export async function autoCompletePastBookings(): Promise<number> {
   const role = currentUser()?.role;
   if ((role !== 'admin' && role !== 'stylist') || autoCompleting || !supabase) return 0;
   const now = Date.now();
-  const due = cache.appointments.filter(
-    (a) => a.status === 'booked' && new Date(`${a.date}T${a.time}:00`).getTime() + a.duration_min * 60000 <= now
-  );
-  if (due.length === 0) return 0;
+  const due = cache.appointments.filter((a) => a.status === 'booked' && endMs(a) <= now);
+  const expired = cache.appointments.filter((a) => a.status === 'pending' && startMs(a) <= now);
+  if (due.length === 0 && expired.length === 0) return 0;
   autoCompleting = true;
   try {
+    if (expired.length) {
+      const ids = expired.map((a) => a.id);
+      const stamp = new Date().toISOString();
+      cache.appointments = cache.appointments.map((a) =>
+        ids.includes(a.id) ? { ...a, status: 'cancelled' as const, cancelled_by: 'system' as const, updated_at: stamp } : a
+      );
+      emitChange();
+      await write(
+        db().from('appointments').update({ status: 'cancelled', cancelled_by: 'system', updated_at: stamp }).in('id', ids).eq('status', 'pending')
+      );
+      for (const a of expired) {
+        logActivity('booking_expired', `Not confirmed in time: ${describe(a)}`, {
+          stylist_id: a.stylist_id,
+          appointment_id: a.id,
+          system: true,
+        });
+      }
+    }
+    if (due.length === 0) return expired.length;
     const ids = due.map((a) => a.id);
     const stamp = new Date().toISOString();
     cache.appointments = cache.appointments.map((a) =>
@@ -817,7 +867,7 @@ export async function autoCompletePastBookings(): Promise<number> {
         system: true,
       });
     }
-    return due.length;
+    return due.length + expired.length;
   } finally {
     autoCompleting = false;
   }

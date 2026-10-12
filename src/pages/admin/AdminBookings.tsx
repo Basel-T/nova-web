@@ -11,6 +11,7 @@ import {
   getStylistById,
   getStylists,
   getUserById,
+  isStillUpcoming,
   useStoreVersion,
 } from '../../store';
 import { Avatar, Card, Chips, EmptyState, Segmented, Select, Sheet, StatusPill, Button, cx, inputCls } from '../../ui';
@@ -33,7 +34,7 @@ export default function AdminBookings() {
   const stylists = getStylists(true);
 
   const todayCount = all.filter((a) => a.date === today && a.status !== 'cancelled').length;
-  const pending = all.filter((a) => a.status === 'pending' && a.date >= today).length;
+  const pending = all.filter((a) => a.status === 'pending' && isStillUpcoming(a)).length;
   const expected = all.filter((a) => a.date >= today && (a.status === 'pending' || a.status === 'booked')).reduce((s, a) => s + a.price, 0);
 
   const query = q.trim().toLowerCase();
@@ -181,7 +182,7 @@ function BookingDetails({ appt }: { appt: Appointment }) {
         <Row label="Time" value={`${appt.time} – ${endTime(appt.time, appt.duration_min)}`} />
         <Row label="Price" value={formatPrice(appt.price)} />
         {appt.created_at && <Row label="Booked" value={new Date(appt.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} />}
-        {appt.status === 'cancelled' && appt.cancelled_by && <Row label="Cancelled by" value={appt.cancelled_by} />}
+        {appt.status === 'cancelled' && appt.cancelled_by && <Row label="Cancelled by" value={appt.cancelled_by === 'system' ? 'Not confirmed in time' : appt.cancelled_by} />}
       </div>
       {appt.client_note && (
         <p className="flex gap-2.5 rounded-2xl bg-white/[0.03] px-4 py-3 text-sm text-ink-200">
