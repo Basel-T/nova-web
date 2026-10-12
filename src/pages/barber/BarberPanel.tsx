@@ -68,6 +68,7 @@ import {
   relativeDay,
   timeOptions,
   toMin,
+  nowMinutes,
   todayStr,
   weekdayOf,
 } from '../../lib/time';
@@ -312,7 +313,6 @@ export function AppointmentCard({ appt, showDate = false }: { appt: Appointment;
 /** Confirm / decline / complete / no-show / cancel — shared with the admin */
 export function AppointmentActions({ appt }: { appt: Appointment }) {
   const [busy, setBusy] = useState<string | null>(null);
-  const today = todayStr();
   const client = getUserById(appt.user_id)?.full_name ?? 'the client';
 
   const run = async (status: Appointment['status'], label: string, ask?: { title: string; message: string; confirmText: string }) => {
@@ -395,7 +395,7 @@ export function AppointmentActions({ appt }: { appt: Appointment }) {
             Cancel
           </Button>
         )}
-        {appt.date <= today && (
+        {started && (
           <>
             <Button
               size="sm"
@@ -568,9 +568,16 @@ function BlockSheet({ stylist, date, open, onClose }: { stylist: Stylist; date: 
   const hours = getHoursFor(date)!;
   const step = Math.min(15, getSettings().slot_interval);
   const options = timeOptions(hours.open, hours.close, step);
-  const [start, setStart] = useState(options.includes('13:00') ? '13:00' : options[0]);
-  const [end, setEnd] = useState(options.includes('14:00') ? '14:00' : options[Math.min(4, options.length - 1)]);
-  const [note, setNote] = useState('Lunch');
+  // Today: don't offer start times that already passed
+  const nowM = date === todayStr() ? nowMinutes() : -1;
+  const startOptions = options.slice(0, -1).filter((t) => toMin(t) > nowM);
+  const defaultEnd = (from: string) =>
+    options.find((t) => toMin(t) >= toMin(from) + 60) ?? options[options.length - 1];
+  const firstStart = startOptions.includes('13:00') ? '13:00' : startOptions[0] ?? '';
+  const [start, setStart] = useState(firstStart);
+  const [end, setEnd] = useState(firstStart ? defaultEnd(firstStart) : '');
+  const [note, setNote] = useState(''); // no reason pre-selected
+  const endOptions = options.filter((t) => start && toMin(t) > toMin(start));
   const [saving, setSaving] = useState(false);
 
   const s = toMin(start);
@@ -578,7 +585,13 @@ function BlockSheet({ stylist, date, open, onClose }: { stylist: Stylist; date: 
   const clash = getAppointmentsForStylist(stylist.id, date).some(
     (a) => (a.status === 'pending' || a.status === 'booked') && s < toMin(a.time) + a.duration_min && e > toMin(a.time)
   );
-  const error = e <= s ? 'End time must be after the start time' : clash ? 'You have a booking during that time' : '';
+  const error = !start
+    ? 'No time left to block today'
+    : e <= s
+      ? 'End time must be after the start time'
+      : clash
+        ? 'You have a booking during that time'
+        : '';
 
   const save = async () => {
     if (error) return;
@@ -601,22 +614,29 @@ function BlockSheet({ stylist, date, open, onClose }: { stylist: Stylist; date: 
       subtitle={formatLongDate(date)}
       footer={
         <Button variant="gold" size="lg" className="w-full" disabled={!!error} loading={saving} onClick={save}>
-          Block {start} – {end}
+          {start ? `Block ${start} – ${end}` : 'Block time'}
         </Button>
       }
     >
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <Field label="From">
-            <Select value={start} onChange={(ev) => setStart(ev.target.value)}>
-              {options.slice(0, -1).map((t) => (
+            <Select
+              value={start}
+              onChange={(ev) => {
+                const v = ev.target.value;
+                setStart(v);
+                if (toMin(end) <= toMin(v)) setEnd(defaultEnd(v));
+              }}
+            >
+              {startOptions.map((t) => (
                 <option key={t}>{t}</option>
               ))}
             </Select>
           </Field>
           <Field label="To">
             <Select value={end} onChange={(ev) => setEnd(ev.target.value)}>
-              {options.slice(1).map((t) => (
+              {endOptions.map((t) => (
                 <option key={t}>{t}</option>
               ))}
             </Select>
@@ -629,7 +649,7 @@ function BlockSheet({ stylist, date, open, onClose }: { stylist: Stylist; date: 
               <button
                 key={n}
                 type="button"
-                onClick={() => setNote(n)}
+                onClick={() => setNote(note === n ? '' : n)}
                 className={cx(
                   'h-8 rounded-full border px-3 text-[13px] transition',
                   note === n ? 'border-gold-400/50 bg-gold-400/10 text-gold-200' : 'border-white/[0.08] text-ink-300'

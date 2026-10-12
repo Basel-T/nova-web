@@ -822,6 +822,8 @@ export function hasReachedBookingLimit(userId: string): boolean {
  *    revenue; barbers can still change it to No-show afterwards).
  *  • Pending requests whose start time passed without a confirmation →
  *    Cancelled by 'system' ("Not confirmed in time"), freeing the client's limit.
+ * LATER (before a real shop): this uses the clock of the staff member's phone.
+ * Add a shop time-zone setting, or run these checks in the database on a schedule.
  */
 let autoCompleting = false;
 export async function autoCompletePastBookings(): Promise<number> {
@@ -1062,9 +1064,24 @@ export function getAnyBarberStarts(date: string, duration: number): string[] {
   return [...all].sort();
 }
 
-/** "Any barber": the first barber (in team order) who is free at that time */
+/**
+ * "Any barber": barbers free at that time, least busy that day first
+ * (fewest non-cancelled bookings), ties broken by team order — shares the work.
+ */
+export function freeBarbersRanked(date: string, time: string, duration: number): Stylist[] {
+  const load = (id: string) =>
+    cache.appointments.filter((a) => a.stylist_id === id && a.date === date && a.status !== 'cancelled').length;
+  return getStylists()
+    .map((s, order) => ({ s, order }))
+    .filter(({ s }) => getAvailableStarts(s.id, date, duration).includes(time))
+    .map((x) => ({ ...x, load: load(x.s.id) }))
+    .sort((a, b) => a.load - b.load || a.order - b.order)
+    .map((x) => x.s);
+}
+
+/** "Any barber": the barber who will get the booking */
 export function firstFreeBarber(date: string, time: string, duration: number): Stylist | undefined {
-  return getStylists().find((s) => getAvailableStarts(s.id, date, duration).includes(time));
+  return freeBarbersRanked(date, time, duration)[0];
 }
 
 /** First free date & time for a barber (within the booking window) */

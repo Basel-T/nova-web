@@ -436,7 +436,10 @@ export function BottomNav<T extends string>({
           return (
             <button
               key={key}
-              onClick={() => onChange(key)}
+              onClick={() => {
+                clearToasts(); // messages from the previous tab shouldn't linger
+                onChange(key);
+              }}
               className={cx(
                 'relative flex h-16 flex-1 flex-col items-center justify-center gap-1 transition-colors',
                 active ? 'text-gold-300' : 'text-ink-400 hover:text-ink-200'
@@ -727,7 +730,14 @@ export function toast(message: string, kind: ToastKind = 'success'): void {
   setTimeout(() => {
     toasts = toasts.filter((t) => t.id !== id);
     notifyToasts();
-  }, kind === 'error' ? 4500 : 3000);
+  }, kind === 'error' ? 3500 : 2500);
+}
+
+/** Remove every toast at once (e.g. when the user switches tabs) */
+export function clearToasts(): void {
+  if (toasts.length === 0) return;
+  toasts = [];
+  notifyToasts();
 }
 
 export function Toaster() {
@@ -739,16 +749,17 @@ export function Toaster() {
     () => toasts
   );
   return createPortal(
-    // Bottom of the screen, above the bottom menu / booking button — never covers the header or logo
+    // Top of the screen, above every sheet and dialog (z-70 > sheets z-50 / dialogs z-60),
+    // so it never sits on top of sheet content like a phone number
     <div
-      className="pointer-events-none fixed inset-x-0 z-[70] flex flex-col items-center gap-2 px-4"
-      style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom))' }}
+      className="pointer-events-none fixed inset-x-0 top-0 z-[70] flex flex-col items-center gap-2 px-4"
+      style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
     >
       {list.map((t) => (
         <div
           key={t.id}
           role="status"
-          className="animate-toast pointer-events-auto flex max-w-sm items-center gap-3 rounded-2xl border border-white/10 bg-ink-850/95 px-4 py-3 text-sm text-cream shadow-2xl backdrop-blur-xl"
+          className="animate-toast pointer-events-auto flex max-w-sm items-center gap-2.5 rounded-2xl border border-white/10 bg-ink-850/95 px-3.5 py-2.5 text-[13px] text-cream shadow-2xl backdrop-blur-xl"
         >
           <span
             className={cx(

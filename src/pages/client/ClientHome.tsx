@@ -31,7 +31,7 @@ import {
   hasReachedBookingLimit,
   getUserAppointments,
   formatPrice,
-  isActive,
+  isStillUpcoming,
   updateAppointmentStatus,
   useStoreVersion,
 } from '../../store';
@@ -194,11 +194,10 @@ function Home({
   useStoreVersion();
   const [accountOpen, setAccountOpen] = useState(false);
   const settings = getSettings();
-  const today = todayStr();
   const upcomingList = getUserUpcoming(user.id);
   const upcoming = upcomingList[0];
   const canBookMore = upcomingList.length < settings.max_upcoming;
-  const visits = getUserAppointments(user.id).filter((a) => !(isActive(a) && a.date >= today));
+  const visits = getUserAppointments(user.id).filter((a) => !isStillUpcoming(a)); // past & cancelled, newest first
   const services = getServices();
   const team = getStylists();
   const daysSince = getDaysSinceLastVisit(user.id);
@@ -311,7 +310,7 @@ function Home({
                         {formatShortDate(a.date)} · {barber?.name ?? 'Barber'}
                       </p>
                     </div>
-                    <StatusPill status={a.status} />
+                    <VisitPill appt={a} />
                   </div>
                 );
               })}
@@ -331,7 +330,29 @@ function Home({
             <p className="tnum text-sm text-ink-400">{user.mobile_number}</p>
           </div>
         </div>
-        <Button variant="outline" className="mt-4 w-full" icon={<LogOut className="size-4" />} onClick={onLogout}>
+
+        <p className="mb-2 mt-6 text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-400">My visits</p>
+        {visits.length === 0 ? (
+          <p className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-4 text-sm text-ink-400">
+            No past visits yet — they'll appear here after your first appointment.
+          </p>
+        ) : (
+          <ul className="divide-y divide-white/[0.05] rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+            {visits.slice(0, 20).map((a) => (
+              <li key={a.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-cream">{a.service_name}</p>
+                  <p className="tnum text-xs text-ink-400">
+                    {formatShortDate(a.date)} · {a.time} · {getStylistById(a.stylist_id)?.name ?? 'Barber'} · {formatPrice(a.price)}
+                  </p>
+                </div>
+                <VisitPill appt={a} />
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <Button variant="outline" className="mt-5 w-full" icon={<LogOut className="size-4" />} onClick={onLogout}>
           Sign out
         </Button>
       </Sheet>
@@ -339,6 +360,19 @@ function Home({
       <BookedSheet id={justBooked} onClose={onDismissBooked} userId={user.id} />
     </div>
   );
+}
+
+/** Status for a past visit — requests nobody confirmed in time read "Not confirmed" */
+function VisitPill({ appt }: { appt: Appointment }) {
+  if (appt.status === 'pending' || appt.cancelled_by === 'system') {
+    return (
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium text-ink-300 ring-1 ring-inset ring-white/10">
+        <span className="size-1.5 rounded-full bg-ink-400" />
+        Not confirmed
+      </span>
+    );
+  }
+  return <StatusPill status={appt.status} />;
 }
 
 function BookCta({ onBook }: { onBook: () => void }) {

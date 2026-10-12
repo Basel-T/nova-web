@@ -12,6 +12,7 @@ import type { User } from '../../types';
 import {
   addAppointment,
   firstFreeBarber,
+  freeBarbersRanked,
   formatPrice,
   getAnyBarberStarts,
   getAvailableStarts,
@@ -89,7 +90,7 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
 
   const service = getServiceById(serviceId);
   const isAny = stylistId === ANY;
-  // With "Any barber", the barber is the first one free at the chosen time
+  // With "Any barber", the barber is the least busy one free at the chosen time
   const stylist =
     isAny && service && date && time ? firstFreeBarber(date, time, service.duration_min) : getStylistById(stylistId);
 
@@ -131,9 +132,7 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
     setBusy(true);
     submitting.current = true;
     // "Any barber": if the first free barber gets taken meanwhile, try the next one
-    const candidates = isAny
-      ? getStylists().filter((s) => getAvailableStarts(s.id, date, service.duration_min).includes(time))
-      : [stylist];
+    const candidates = isAny ? freeBarbersRanked(date, time, service.duration_min) : [stylist];
     try {
       for (const barber of candidates) {
         try {
@@ -241,7 +240,7 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
                   <p className="font-display text-[26px] leading-tight text-cream">{service.name}</p>
                   <p className="text-sm text-ink-400">
                     with {stylist.name}
-                    {isAny && <span className="text-gold-300/90"> · first available</span>}
+                    {isAny && <span className="text-gold-300/90"> · assigned for you</span>}
                   </p>
                 </div>
               </div>
@@ -363,7 +362,7 @@ function BarberStep({
         <div className="min-w-0 flex-1 py-1 pr-1">
           <p className="text-[17px] font-medium text-cream">Any barber</p>
           <p className="text-[13px] text-gold-300/90">Fastest option</p>
-          <p className="mt-1.5 text-[13px] leading-snug text-ink-400">We'll book the first barber who is free at your time.</p>
+          <p className="mt-1.5 text-[13px] leading-snug text-ink-400">We'll book a free barber for your time — whoever is least busy that day.</p>
           <p
             className={cx(
               'mt-2.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px]',
