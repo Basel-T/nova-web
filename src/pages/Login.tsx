@@ -8,7 +8,7 @@
 // ============================================================
 
 import { FormEvent, useState } from 'react';
-import { ArrowLeft, ArrowRight, Crown, Lock, Phone, Scissors, UserRound } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Crown, FlaskConical, Lock, Phone, Scissors, UserRound } from 'lucide-react';
 import type { User } from '../types';
 import { addUser, findUserByMobile, getHoursFor, getSettings, saveSession, staffLogin, useStoreVersion } from '../store';
 import { Avatar, Button, LanguageSwitcher, LogoMark, Wordmark, cx, inputCls } from '../ui';
@@ -16,6 +16,7 @@ import { cleanNumber, digitCount } from '../lib/util';
 import { DEMO_ACCOUNTS, DEMO_MODE } from '../config';
 import { todayStr } from '../lib/time';
 import { t, type MessageKey } from '../i18n';
+import { PrivacyLink } from './Privacy';
 
 type Step = 'phone' | 'name' | 'password';
 type DemoRole = 'admin' | 'barber' | 'client';
@@ -136,11 +137,17 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
 
   return (
     <div className="page-glow grain relative flex min-h-dvh flex-col">
-      <div className="absolute end-4 z-10" style={{ top: 'calc(env(safe-area-inset-top) + 1rem)' }}>
-        <LanguageSwitcher />
-      </div>
+      <header className="relative z-10 flex items-start gap-3 px-4" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}>
+        {DEMO_MODE && (
+          <p role="note" className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-2xl border border-amber-300/25 bg-amber-300/[0.07] px-3.5 py-2 text-[12.5px] leading-snug text-amber-100">
+            <FlaskConical className="size-4 shrink-0 text-amber-300" strokeWidth={1.8} />
+            {t('demo.banner')}
+          </p>
+        )}
+        <LanguageSwitcher className="ms-auto shrink-0" />
+      </header>
 
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 py-12">
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 pb-12 pt-8">
         {/* Brand */}
         <div className="animate-rise flex flex-col items-center text-center">
           <LogoMark size={68} />
@@ -197,6 +204,7 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
                 />
               </div>
               {error && <p className="mt-2.5 text-sm text-rose-300">{error}</p>}
+              {DEMO_MODE && <p className="mt-2.5 text-xs leading-relaxed text-ink-400">{t('demo.loginNote')}</p>}
               <Button type="submit" variant="gold" size="lg" className="mt-5 w-full" loading={busy}>
                 {t('login.continue')} <ArrowRight className="size-4 rtl:-scale-x-100" />
               </Button>
@@ -263,7 +271,10 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
       </main>
 
       <footer className="px-6 pb-8 text-center text-xs text-ink-300">
-        {hours ? t('login.openToday', { from: hours.open, to: hours.close }) : t('login.closedToday')} · {settings.address}
+        <p>
+          {hours ? t('login.openToday', { from: hours.open, to: hours.close }) : t('login.closedToday')} · {settings.address}
+        </p>
+        <PrivacyLink className="mt-3" />
       </footer>
     </div>
   );

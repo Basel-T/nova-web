@@ -63,6 +63,7 @@ import {
   todayStr,
 } from '../../lib/time';
 import { cleanNumber, downloadIcs, mapsUrl } from '../../lib/util';
+import { PrivacyLink } from '../Privacy';
 import BookingFlow from './BookingFlow';
 import { t } from '../../i18n';
 
@@ -334,6 +335,7 @@ function Home({
         </div>
 
         <LanguageSwitcher variant="row" className="mt-4" />
+        <PrivacyLink variant="row" className="mt-2" />
 
         <p className="mb-2 mt-6 text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-400">{t('client.myVisits')}</p>
         {visits.length === 0 ? (

@@ -48,7 +48,7 @@ export default function AdminSettings({ user }: { user: User }) {
     setSaving(true);
     try {
       const { id: _id, ...patch } = draft;
-      await saveSettings({ ...patch, shop_name: draft.shop_name.trim(), tagline: draft.tagline.trim(), address: draft.address.trim(), phone: cleanNumber(draft.phone) });
+      await saveSettings({ ...patch, shop_name: draft.shop_name.trim(), tagline: draft.tagline.trim(), address: draft.address.trim(), phone: cleanNumber(draft.phone), privacy_contact: (draft.privacy_contact ?? '').trim() });
       toast(t('settings.saved'));
     } catch (e) {
       toast(t('errors.generic'), 'error');
@@ -89,6 +89,17 @@ export default function AdminSettings({ user }: { user: User }) {
             </Select>
           </Field>
         </div>
+        <Field label={t('settings.privacyContact')}>
+          <input
+            value={draft.privacy_contact ?? ''}
+            onChange={(e) => set({ privacy_contact: e.target.value })}
+            dir="ltr"
+            autoComplete="off"
+            placeholder={t('settings.privacyPlaceholder')}
+            className={cx(inputCls, 'text-start')}
+          />
+          <p className="mt-1.5 text-xs text-ink-400">{t('settings.privacyContactHint')}</p>
+        </Field>
       </Section>
 
       {/* Opening hours */}
