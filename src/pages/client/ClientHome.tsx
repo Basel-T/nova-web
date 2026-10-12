@@ -44,13 +44,15 @@ import {
   SectionTitle,
   Sheet,
   StatusPill,
+  LanguageSwitcher,
   Wordmark,
   confirmDialog,
   cx,
   toast,
 } from '../../ui';
 import {
-  WEEKDAYS,
+  WEEK_ORDER,
+  weekdayName,
   countdown,
   endTime,
   formatDuration,
@@ -62,6 +64,7 @@ import {
 } from '../../lib/time';
 import { downloadIcs, mapsUrl } from '../../lib/util';
 import BookingFlow from './BookingFlow';
+import { t } from '../../i18n';
 
 interface BookingState {
   step: number;
@@ -147,13 +150,12 @@ function LimitSheet({ open, onClose, userId }: { open: boolean; onClose: () => v
   const max = getSettings().max_upcoming;
   const upcoming = getUserUpcoming(userId);
   return (
-    <Sheet open={open} onClose={onClose} title="Booking limit reached">
+    <Sheet open={open} onClose={onClose} title={t('client.limitTitle')}>
       <div className="space-y-4">
         <div className="flex gap-3 rounded-2xl border border-amber-300/20 bg-amber-400/[0.07] p-4">
           <CalendarClock className="mt-0.5 size-5 shrink-0 text-amber-300" />
           <p className="text-sm leading-relaxed text-amber-50/90">
-            You already have <strong>{upcoming.length}</strong> upcoming booking{upcoming.length === 1 ? '' : 's'}. The shop allows up to{' '}
-            <strong>{max}</strong> at a time, so you can book again once one of them has taken place — or cancel one from your home screen.
+            {t('client.limitText', { n: upcoming.length, max })}
           </p>
         </div>
         <ul className="space-y-2">
@@ -167,7 +169,7 @@ function LimitSheet({ open, onClose, userId }: { open: boolean; onClose: () => v
           ))}
         </ul>
         <Button variant="gold" className="w-full" onClick={onClose}>
-          Got it
+          {t('common.gotIt')}
         </Button>
       </div>
     </Sheet>
@@ -208,7 +210,7 @@ function Home({
       <AppHeader
         left={<Wordmark name={settings.shop_name} className="text-[24px]" />}
         right={
-          <button onClick={() => setAccountOpen(true)} aria-label="Account" className="rounded-full ring-1 ring-white/10 transition hover:ring-gold-400/50">
+          <button onClick={() => setAccountOpen(true)} aria-label={t('client.account')} className="rounded-full ring-1 ring-white/10 transition hover:ring-gold-400/50">
             <Avatar name={user.full_name} size={38} />
           </button>
         }
@@ -222,11 +224,11 @@ function Home({
           <p className="mt-3 text-sm text-ink-400">
             {daysSince === null
               ? upcoming
-                ? 'Your first visit is coming up — see you soon.'
-                : 'Welcome — your first fresh cut is a few taps away.'
+                ? t('client.firstVisitSoon')
+                : t('client.firstVisitWelcome')
               : daysSince === 0
-                ? 'Looking sharp — you were in today.'
-                : `${daysSince} day${daysSince === 1 ? '' : 's'} since your last visit${daysSince >= 21 ? ' · time for a refresh?' : '.'}`}
+                ? t('client.inToday')
+                : t('client.daysSince', { n: daysSince }) + (daysSince >= 21 ? ` · ${t('client.refresh')}` : '')}
           </p>
         </section>
 
@@ -237,15 +239,15 @@ function Home({
           ) : (
             <div className="space-y-4">
               {upcomingList.map((a, i) => (
-                <UpcomingCard key={a.id} appt={a} label={i === 0 ? 'Your next visit' : 'Also booked'} />
+                <UpcomingCard key={a.id} appt={a} label={i === 0 ? t('client.nextVisit') : t('client.alsoBooked')} />
               ))}
               {canBookMore ? (
                 <Button variant="outline" size="lg" className="w-full" icon={<CalendarPlus className="size-[18px]" />} onClick={() => onBook({})}>
-                  Book another appointment
+                  {t('client.bookAnother')}
                 </Button>
               ) : (
                 <p className="text-center text-xs text-ink-400">
-                  You have the maximum of {settings.max_upcoming} upcoming booking{settings.max_upcoming === 1 ? '' : 's'}.
+                  {t('client.maxReached', { n: settings.max_upcoming })}
                 </p>
               )}
             </div>
@@ -255,7 +257,7 @@ function Home({
         {/* Services */}
         {services.length > 0 && (
           <section className="animate-rise" style={{ animationDelay: '120ms' }}>
-            <SectionTitle>Services</SectionTitle>
+            <SectionTitle>{t('client.services')}</SectionTitle>
             <Card className="divide-y divide-white/[0.05] overflow-hidden">
               {services.map((s) => (
                 <button
@@ -271,7 +273,7 @@ function Home({
                     </p>
                   </div>
                   <span className="tnum font-display text-[22px] text-cream">{formatPrice(s.price)}</span>
-                  <ChevronRight className="size-4 text-ink-500" />
+                  <ChevronRight className="size-4 text-ink-500 rtl:-scale-x-100" />
                 </button>
               ))}
             </Card>
@@ -281,10 +283,10 @@ function Home({
         {/* Team */}
         {team.length > 0 && (
           <section>
-            <SectionTitle>The team</SectionTitle>
+            <SectionTitle>{t('client.team')}</SectionTitle>
             <div className="scrollbar-hide -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1">
               {team.map((s) => (
-                <button key={s.id} onClick={() => onBook({ stylistId: s.id })} className="group w-[150px] shrink-0 snap-start text-left">
+                <button key={s.id} onClick={() => onBook({ stylistId: s.id })} className="group w-[150px] shrink-0 snap-start text-start">
                   <Portrait name={s.name} src={s.image} className="rounded-3xl border border-white/[0.07] transition group-hover:border-gold-400/40" />
                   <p className="mt-3 font-medium text-cream">{s.name}</p>
                   <p className="text-xs text-ink-400">{s.title}</p>
@@ -297,7 +299,7 @@ function Home({
         {/* History */}
         {visits.length > 0 && (
           <section>
-            <SectionTitle>Your visits</SectionTitle>
+            <SectionTitle>{t('client.yourVisits')}</SectionTitle>
             <Card className="divide-y divide-white/[0.05]">
               {visits.slice(0, 8).map((a) => {
                 const barber = getStylistById(a.stylist_id);
@@ -307,7 +309,7 @@ function Home({
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-cream">{a.service_name}</p>
                       <p className="text-xs text-ink-400">
-                        {formatShortDate(a.date)} · {barber?.name ?? 'Barber'}
+                        {formatShortDate(a.date)} · {barber?.name ?? t('client.barber')}
                       </p>
                     </div>
                     <VisitPill appt={a} />
@@ -322,7 +324,7 @@ function Home({
       </main>
 
       {/* Account */}
-      <Sheet open={accountOpen} onClose={() => setAccountOpen(false)} title="Your account">
+      <Sheet open={accountOpen} onClose={() => setAccountOpen(false)} title={t('client.account')}>
         <div className="flex items-center gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
           <Avatar name={user.full_name} size={52} />
           <div>
@@ -331,10 +333,12 @@ function Home({
           </div>
         </div>
 
-        <p className="mb-2 mt-6 text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-400">My visits</p>
+        <LanguageSwitcher variant="row" className="mt-4" />
+
+        <p className="mb-2 mt-6 text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-400">{t('client.myVisits')}</p>
         {visits.length === 0 ? (
           <p className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-4 text-sm text-ink-400">
-            No past visits yet — they'll appear here after your first appointment.
+            {t('client.noVisits')}
           </p>
         ) : (
           <ul className="divide-y divide-white/[0.05] rounded-2xl border border-white/[0.06] bg-white/[0.02]">
@@ -343,7 +347,7 @@ function Home({
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-cream">{a.service_name}</p>
                   <p className="tnum text-xs text-ink-400">
-                    {formatShortDate(a.date)} · {a.time} · {getStylistById(a.stylist_id)?.name ?? 'Barber'} · {formatPrice(a.price)}
+                    {formatShortDate(a.date)} · {a.time} · {getStylistById(a.stylist_id)?.name ?? t('client.barber')} · {formatPrice(a.price)}
                   </p>
                 </div>
                 <VisitPill appt={a} />
@@ -353,7 +357,7 @@ function Home({
         )}
 
         <Button variant="outline" className="mt-5 w-full" icon={<LogOut className="size-4" />} onClick={onLogout}>
-          Sign out
+          {t('common.signOut')}
         </Button>
       </Sheet>
 
@@ -368,7 +372,7 @@ function VisitPill({ appt }: { appt: Appointment }) {
     return (
       <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium text-ink-300 ring-1 ring-inset ring-white/10">
         <span className="size-1.5 rounded-full bg-ink-400" />
-        Not confirmed
+        {t('status.notConfirmed')}
       </span>
     );
   }
@@ -378,37 +382,42 @@ function VisitPill({ appt }: { appt: Appointment }) {
 function BookCta({ onBook }: { onBook: () => void }) {
   return (
     <Card className="grain relative overflow-hidden p-6">
-      <div className="pointer-events-none absolute -right-16 -top-16 size-56 rounded-full bg-gold-400/15 blur-3xl" />
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gold-300/90">Book in 30 seconds</p>
-      <h2 className="mt-3 font-display text-[34px] leading-[1.05] text-cream">Ready for a fresh cut?</h2>
-      <p className="mt-2 text-sm text-ink-400">Choose a service, your barber and a time that suits you.</p>
+      <div className="pointer-events-none absolute -end-16 -top-16 size-56 rounded-full bg-gold-400/15 blur-3xl" />
+      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gold-300/90">{t('client.ctaKicker')}</p>
+      <h2 className="mt-3 font-display text-[34px] leading-[1.05] text-cream">{t('client.ctaTitle')}</h2>
+      <p className="mt-2 text-sm text-ink-400">{t('client.ctaText')}</p>
       <Button variant="gold" size="lg" className="mt-6 w-full" icon={<CalendarPlus className="size-[18px]" />} onClick={onBook}>
-        Book an appointment
+        {t('client.bookAppointment')}
       </Button>
     </Card>
   );
 }
 
-function UpcomingCard({ appt, label = 'Your next visit' }: { appt: Appointment; label?: string }) {
+function UpcomingCard({ appt, label }: { appt: Appointment; label?: string }) {
   const settings = getSettings();
   const barber = getStylistById(appt.stylist_id);
   const [busy, setBusy] = useState(false);
 
   const cancel = async () => {
     const ok = await confirmDialog({
-      title: 'Cancel this appointment?',
-      message: `${appt.service_name} with ${barber?.name ?? 'your barber'} on ${formatLongDate(appt.date)} at ${appt.time}.`,
-      confirmText: 'Cancel it',
-      cancelText: 'Keep it',
+      title: t('client.cancelTitle'),
+      message: t('client.cancelText', {
+        service: appt.service_name,
+        barber: barber?.name ?? t('client.yourBarber'),
+        date: formatLongDate(appt.date),
+        time: appt.time,
+      }),
+      confirmText: t('client.cancelIt'),
+      cancelText: t('client.keepIt'),
       destructive: true,
     });
     if (!ok) return;
     setBusy(true);
     try {
       await updateAppointmentStatus(appt.id, 'cancelled');
-      toast('Appointment cancelled');
+      toast(t('client.cancelled'));
     } catch {
-      toast('Could not cancel — please try again', 'error');
+      toast(t('client.cancelFailed'), 'error');
     } finally {
       setBusy(false);
     }
@@ -418,7 +427,7 @@ function UpcomingCard({ appt, label = 'Your next visit' }: { appt: Appointment; 
     <Card className="relative overflow-hidden p-5">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-gold-400/[0.08] to-transparent" />
       <div className="relative flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gold-300/90">{label}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gold-300/90">{label ?? t('client.nextVisit')}</span>
         <StatusPill status={appt.status} />
       </div>
 
@@ -441,7 +450,7 @@ function UpcomingCard({ appt, label = 'Your next visit' }: { appt: Appointment; 
       <div className="flex items-center gap-3">
         <Avatar name={barber?.name ?? '?'} src={barber?.image} size={48} className="rounded-2xl" />
         <div className="min-w-0 flex-1">
-          <p className="font-medium text-cream">{barber?.name ?? 'Your barber'}</p>
+          <p className="font-medium text-cream">{barber?.name ?? t('client.yourBarber')}</p>
           <p className="truncate text-sm text-ink-400">
             {appt.service_name} · {formatDuration(appt.duration_min)}
           </p>
@@ -452,7 +461,7 @@ function UpcomingCard({ appt, label = 'Your next visit' }: { appt: Appointment; 
       {appt.status === 'pending' && (
         <p className="mt-4 flex items-center gap-2.5 rounded-2xl border border-amber-300/15 bg-amber-400/[0.06] px-3.5 py-2.5 text-[13px] text-amber-100/90">
           <Clock className="size-4 shrink-0 text-amber-300" />
-          Waiting for {barber?.name.split(' ')[0] ?? 'your barber'} to confirm — this updates live.
+          {t('client.waitingFor', { name: barber?.name.split(' ')[0] ?? t('client.yourBarber') })}
         </p>
       )}
 
@@ -464,7 +473,7 @@ function UpcomingCard({ appt, label = 'Your next visit' }: { appt: Appointment; 
           onClick={() =>
             downloadIcs({
               title: `${appt.service_name} · ${settings.shop_name}`,
-              description: `With ${barber?.name ?? 'your barber'}`,
+              description: t('client.icsWith', { name: barber?.name ?? t('client.yourBarber') }),
               location: settings.address,
               date: appt.date,
               time: appt.time,
@@ -472,7 +481,7 @@ function UpcomingCard({ appt, label = 'Your next visit' }: { appt: Appointment; 
             })
           }
         >
-          Calendar
+          {t('client.calendar')}
         </Button>
         <a
           href={mapsUrl(settings.address)}
@@ -480,10 +489,10 @@ function UpcomingCard({ appt, label = 'Your next visit' }: { appt: Appointment; 
           rel="noreferrer"
           className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-white/[0.06] text-[13px] font-medium text-cream transition hover:bg-white/[0.1]"
         >
-          <Navigation className="size-4" /> Directions
+          <Navigation className="size-4" /> {t('client.directions')}
         </a>
         <Button variant="ghost" size="sm" onClick={cancel} loading={busy} className="text-rose-300 hover:text-rose-200">
-          Cancel
+          {t('common.cancel')}
         </Button>
       </div>
     </Card>
@@ -493,18 +502,18 @@ function UpcomingCard({ appt, label = 'Your next visit' }: { appt: Appointment; 
 function VisitUs() {
   const settings = getSettings();
   const todayIdx = new Date().getDay();
-  const order = [1, 2, 3, 4, 5, 6, 0];
+  const order = WEEK_ORDER; // Monday first
   const hoursToday = getHoursFor(todayStr());
   return (
     <section>
-      <SectionTitle>Visit us</SectionTitle>
+      <SectionTitle>{t('client.visitUs')}</SectionTitle>
       <Card className="p-5">
         <div className="flex items-start gap-3">
           <MapPin className="mt-0.5 size-5 shrink-0 text-gold-300" strokeWidth={1.6} />
           <div className="min-w-0 flex-1">
             <p className="text-cream">{settings.address}</p>
             <p className={cx('mt-0.5 text-sm', hoursToday ? 'text-emerald-300/90' : 'text-ink-400')}>
-              {hoursToday ? `Open today · ${hoursToday.open} – ${hoursToday.close}` : 'Closed today'}
+              {hoursToday ? t('login.openToday', { from: hoursToday.open, to: hoursToday.close }) : t('login.closedToday')}
             </p>
           </div>
           <a
@@ -513,13 +522,13 @@ function VisitUs() {
             rel="noreferrer"
             className="shrink-0 rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-cream hover:bg-white/[0.05]"
           >
-            Directions
+            {t('client.directions')}
           </a>
         </div>
         {settings.phone && (
           <a href={`tel:${settings.phone}`} className="mt-4 flex items-center gap-3 text-cream">
             <Phone className="size-5 text-gold-300" strokeWidth={1.6} />
-            <span className="tnum">{settings.phone}</span>
+            <span className="tnum" dir="ltr">{settings.phone}</span>
           </a>
         )}
         <div className="hairline my-5" />
@@ -528,8 +537,8 @@ function VisitUs() {
             const h = settings.hours[String(d)];
             return (
               <div key={d} className={cx('flex justify-between', d === todayIdx ? 'text-cream' : 'text-ink-400')}>
-                <dt className={d === todayIdx ? 'font-medium' : ''}>{WEEKDAYS[d]}</dt>
-                <dd className="tnum">{h ? `${h.open} – ${h.close}` : 'Closed'}</dd>
+                <dt className={d === todayIdx ? 'font-medium' : ''}>{weekdayName(d)}</dt>
+                <dd className="tnum">{h ? `${h.open} – ${h.close}` : t('client.closed')}</dd>
               </div>
             );
           })}
@@ -548,7 +557,7 @@ function BookedSheet({ id, onClose, userId }: { id: string | null; onClose: () =
   const appt = id ? getUserAppointments(userId).find((a) => a.id === id) : undefined;
   const barber = appt ? getStylistById(appt.stylist_id) : undefined;
   return (
-    <Sheet open={!!appt} onClose={onClose} title={appt?.status === 'booked' ? "You're booked in" : 'Request sent'}>
+    <Sheet open={!!appt} onClose={onClose} title={appt?.status === 'booked' ? t('client.bookedTitle') : t('client.requestSent')}>
       {appt && (
         <div>
           <div className="animate-pop mx-auto mb-5 grid size-16 place-items-center rounded-full bg-gradient-to-b from-gold-300 to-gold-500 shadow-[0_12px_40px_-10px_rgba(201,161,90,0.7)]">
@@ -556,14 +565,16 @@ function BookedSheet({ id, onClose, userId }: { id: string | null; onClose: () =
           </div>
           <p className="text-center text-sm text-ink-300">
             {appt.status === 'booked'
-              ? `See you ${relativeDay(appt.date).toLowerCase() === 'today' ? 'today' : `on ${formatLongDate(appt.date)}`} at ${appt.time}.`
-              : `${barber?.name.split(' ')[0] ?? 'Your barber'} will confirm shortly — you'll see it update on your home screen.`}
+              ? appt.date === todayStr()
+                ? t('client.seeYouToday', { time: appt.time })
+                : t('client.seeYouOn', { date: formatLongDate(appt.date), time: appt.time })
+              : t('client.willConfirm', { name: barber?.name.split(' ')[0] ?? t('client.yourBarber') })}
           </p>
           <div className="mt-5 space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 text-sm">
-            <Row label="Service" value={`${appt.service_name} · ${formatDuration(appt.duration_min)}`} />
-            <Row label="Barber" value={barber?.name ?? '—'} />
-            <Row label="When" value={`${formatShortDate(appt.date)} · ${appt.time}`} />
-            <Row label="Price" value={formatPrice(appt.price)} />
+            <Row label={t('client.service')} value={`${appt.service_name} · ${formatDuration(appt.duration_min)}`} />
+            <Row label={t('client.barber')} value={barber?.name ?? '—'} />
+            <Row label={t('client.when')} value={`${formatShortDate(appt.date)} · ${appt.time}`} />
+            <Row label={t('client.price')} value={formatPrice(appt.price)} />
           </div>
           <div className="mt-5 grid grid-cols-2 gap-2.5">
             <Button
@@ -572,7 +583,7 @@ function BookedSheet({ id, onClose, userId }: { id: string | null; onClose: () =
               onClick={() =>
                 downloadIcs({
                   title: `${appt.service_name} · ${settings.shop_name}`,
-                  description: `With ${barber?.name ?? 'your barber'}`,
+                  description: t('client.icsWith', { name: barber?.name ?? t('client.yourBarber') }),
                   location: settings.address,
                   date: appt.date,
                   time: appt.time,
@@ -580,10 +591,10 @@ function BookedSheet({ id, onClose, userId }: { id: string | null; onClose: () =
                 })
               }
             >
-              Calendar
+              {t('client.calendar')}
             </Button>
             <Button variant="gold" onClick={onClose}>
-              Done
+              {t('common.done')}
             </Button>
           </div>
         </div>
@@ -596,7 +607,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4">
       <span className="text-ink-400">{label}</span>
-      <span className="tnum text-right text-cream">{value}</span>
+      <span className="tnum text-end text-cream">{value}</span>
     </div>
   );
 }

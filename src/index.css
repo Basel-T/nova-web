@@ -67,6 +67,19 @@
   color-scheme: dark;
 }
 
+/* Arabic: a font made for Arabic script (loaded only when Arabic is active),
+   and no letter-spacing — spacing breaks the joined Arabic letters */
+html[lang="ar"] {
+  --font-sans: "IBM Plex Sans Arabic", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "IBM Plex Sans Arabic", "Instrument Serif", ui-serif, serif;
+}
+html[lang="ar"] [class*="tracking-"] {
+  letter-spacing: 0 !important;
+}
+html[lang="ar"] .font-display {
+  font-weight: 600;
+}
+
 html,
 body {
   background: #09090b;

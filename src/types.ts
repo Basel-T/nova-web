@@ -103,6 +103,7 @@ export interface Settings {
   min_notice_min: number;                  // minimum notice before a booking
   auto_confirm: boolean;                   // true = skip the barber's approval
   max_upcoming: number;                    // max upcoming bookings per client (1–3)
+  privacy_contact: string;                 // who clients contact about their data (privacy page)
 }
 
 /** One entry in the shop's activity log */
@@ -117,4 +118,5 @@ export interface ActivityEvent {
   stylist_id: string | null;
   appointment_id: string | null;
   amount: number | null;
+  params?: Record<string, any> | null;     // details used to build the text in any language
 }

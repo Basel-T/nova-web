@@ -15,8 +15,9 @@ import {
   useStoreVersion,
 } from '../../store';
 import { Avatar, Card, Chips, EmptyState, Segmented, Select, Sheet, StatusPill, Button, cx, inputCls } from '../../ui';
-import { endTime, formatDuration, formatLongDate, relativeDay, todayStr } from '../../lib/time';
+import { endTime, formatDuration, formatLongDate, formatTimestamp, relativeDay, todayStr } from '../../lib/time';
 import { AppointmentActions } from '../barber/BarberPanel';
+import { t } from '../../i18n';
 
 type When = 'upcoming' | 'today' | 'past' | 'all';
 
@@ -67,9 +68,9 @@ export default function AdminBookings() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-2.5">
-        <Tile label="Today" value={String(todayCount)} />
-        <Tile label="To confirm" value={String(pending)} accent={pending > 0} />
-        <Tile label="Expected" value={formatPrice(expected)} />
+        <Tile label={t('time.today')} value={String(todayCount)} />
+        <Tile label={t('admin.toConfirm')} value={String(pending)} accent={pending > 0} />
+        <Tile label={t('analytics.expected')} value={formatPrice(expected)} />
       </div>
 
       <Segmented<When>
@@ -79,10 +80,10 @@ export default function AdminBookings() {
           setLimit(80);
         }}
         options={[
-          { value: 'upcoming', label: 'Upcoming' },
-          { value: 'today', label: 'Today' },
-          { value: 'past', label: 'Past' },
-          { value: 'all', label: 'All' },
+          { value: 'upcoming', label: t('admin.upcoming') },
+          { value: 'today', label: t('time.today') },
+          { value: 'past', label: t('admin.past') },
+          { value: 'all', label: t('analytics.catAll') },
         ]}
       />
 
@@ -90,29 +91,29 @@ export default function AdminBookings() {
         value={barber}
         onChange={setBarber}
         options={[
-          { value: 'all', label: 'All barbers', lead: <Users className="size-4" /> },
+          { value: 'all', label: t('analytics.allBarbers'), lead: <Users className="size-4" /> },
           ...stylists.map((s) => ({ value: s.id, label: s.name.split(' ')[0], lead: <Avatar name={s.name} src={s.image} size={22} /> })),
         ]}
       />
 
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-500" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search client, phone, service…" className={cx(inputCls, 'h-11 pl-10 text-sm')} />
+          <Search className="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-500" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('admin.search')} className={cx(inputCls, 'h-11 ps-10 text-sm')} />
         </div>
         <Select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className="w-[140px] [&_select]:h-11 [&_select]:text-sm">
-          <option value="all">Any status</option>
-          <option value="pending">Pending</option>
-          <option value="booked">Confirmed</option>
-          <option value="completed">Completed</option>
-          <option value="no_show">No-show</option>
-          <option value="cancelled">Cancelled</option>
+          <option value="all">{t('admin.anyStatus')}</option>
+          <option value="pending">{t('status.pending')}</option>
+          <option value="booked">{t('status.booked')}</option>
+          <option value="completed">{t('status.completed')}</option>
+          <option value="no_show">{t('status.no_show')}</option>
+          <option value="cancelled">{t('status.cancelled')}</option>
         </Select>
       </div>
 
       {groups.length === 0 ? (
         <Card>
-          <EmptyState icon={CalendarSearch} title="No bookings found" text="Try another filter or time range." />
+          <EmptyState icon={CalendarSearch} title={t('admin.noBookings')} text={t('admin.noBookingsText')} />
         </Card>
       ) : (
         <div className="space-y-5">
@@ -135,14 +136,14 @@ export default function AdminBookings() {
                     <button
                       key={a.id}
                       onClick={() => setOpenId(a.id)}
-                      className={cx('flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.025]', a.status === 'cancelled' && 'opacity-55')}
+                      className={cx('flex w-full items-center gap-3 px-4 py-3.5 text-start transition-colors hover:bg-white/[0.025]', a.status === 'cancelled' && 'opacity-55')}
                     >
                       <span className="tnum w-11 shrink-0 text-sm font-semibold text-cream">{a.time}</span>
                       <Avatar name={s?.name ?? '?'} src={s?.image} size={34} />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[15px] text-cream">{client?.full_name ?? 'Client'}</span>
+                        <span className="block truncate text-[15px] text-cream">{client?.full_name ?? t('barber.client')}</span>
                         <span className="block truncate text-xs text-ink-400">
-                          {a.service_name} · {s?.name.split(' ')[0] ?? 'Former barber'}
+                          {a.service_name} · {s?.name.split(' ')[0] ?? t('analytics.formerBarber')}
                         </span>
                       </span>
                       <span className="flex shrink-0 flex-col items-end gap-1">
@@ -163,7 +164,7 @@ export default function AdminBookings() {
         </div>
       )}
 
-      <Sheet open={!!open} onClose={() => setOpenId(null)} title={open ? getUserById(open.user_id)?.full_name ?? 'Booking' : ''} subtitle={open && <StatusPill status={open.status} />}>
+      <Sheet open={!!open} onClose={() => setOpenId(null)} title={open ? getUserById(open.user_id)?.full_name ?? t('admin.booking') : ''} subtitle={open && <StatusPill status={open.status} />}>
         {open && <BookingDetails appt={open} />}
       </Sheet>
     </div>
@@ -176,13 +177,13 @@ function BookingDetails({ appt }: { appt: Appointment }) {
   return (
     <div className="space-y-4">
       <div className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 text-sm">
-        <Row label="Service" value={`${appt.service_name} · ${formatDuration(appt.duration_min)}`} />
-        <Row label="Barber" value={barber?.name ?? 'Former barber'} />
-        <Row label="Date" value={formatLongDate(appt.date)} />
-        <Row label="Time" value={`${appt.time} – ${endTime(appt.time, appt.duration_min)}`} />
-        <Row label="Price" value={formatPrice(appt.price)} />
-        {appt.created_at && <Row label="Booked" value={new Date(appt.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} />}
-        {appt.status === 'cancelled' && appt.cancelled_by && <Row label="Cancelled by" value={appt.cancelled_by === 'system' ? 'Not confirmed in time' : appt.cancelled_by} />}
+        <Row label={t('client.service')} value={`${appt.service_name} · ${formatDuration(appt.duration_min)}`} />
+        <Row label={t('client.barber')} value={barber?.name ?? t('analytics.formerBarber')} />
+        <Row label={t('booking.date')} value={formatLongDate(appt.date)} />
+        <Row label={t('booking.time')} value={`${appt.time} – ${endTime(appt.time, appt.duration_min)}`} />
+        <Row label={t('client.price')} value={formatPrice(appt.price)} />
+        {appt.created_at && <Row label={t('admin.bookedAt')} value={formatTimestamp(appt.created_at)} />}
+        {appt.status === 'cancelled' && appt.cancelled_by && <Row label={t('admin.cancelledBy')} value={t(`admin.by_${appt.cancelled_by}`)} />}
       </div>
       {appt.client_note && (
         <p className="flex gap-2.5 rounded-2xl bg-white/[0.03] px-4 py-3 text-sm text-ink-200">
@@ -195,8 +196,8 @@ function BookingDetails({ appt }: { appt: Appointment }) {
           className="flex items-center gap-3 rounded-2xl border border-white/[0.08] px-4 py-3 text-cream transition hover:bg-white/[0.03]"
         >
           <Phone className="size-4 text-gold-300" />
-          <span className="tnum flex-1">{client.mobile_number}</span>
-          <span className="text-xs text-ink-400">Call</span>
+          <span className="tnum flex-1 text-start" dir="ltr">{client.mobile_number}</span>
+          <span className="text-xs text-ink-400">{t('common.call')}</span>
         </a>
       )}
       <div className="flex flex-wrap justify-end gap-2">
@@ -210,7 +211,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4">
       <span className="text-ink-400">{label}</span>
-      <span className="tnum text-right text-cream">{value}</span>
+      <span className="tnum text-end text-cream">{value}</span>
     </div>
   );
 }

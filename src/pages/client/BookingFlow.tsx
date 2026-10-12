@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, Check, Clock, MessageSquare, Sparkles, Users, X } from 'lucide-react';
 import type { User } from '../../types';
+import { t, type MessageKey } from '../../i18n';
 import {
   addAppointment,
   firstFreeBarber,
@@ -32,7 +33,7 @@ import {
 import { Avatar, Button, Card, DateStrip, EmptyState, IconButton, Portrait, cx, textareaCls, toast } from '../../ui';
 import { addDays, endTime, toMin, formatDuration, formatLongDate, relativeDay, todayStr } from '../../lib/time';
 
-const STEPS = ['Choose a service', 'Choose your barber', 'Pick a time', 'Review & confirm'];
+const STEPS: MessageKey[] = ['booking.step1', 'booking.step2', 'booking.step3', 'booking.step4'];
 
 /** Special barber choice: whoever is free first at the chosen time */
 const ANY = 'any';
@@ -151,14 +152,14 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
       submitting.current = false;
       const msg = (e as Error).message;
       if (msg === 'LIMIT') {
-        toast(`You already have ${settings.max_upcoming} upcoming booking${settings.max_upcoming === 1 ? '' : 's'} — the maximum`, 'error');
+        toast(t('booking.errLimit', { n: settings.max_upcoming }), 'error');
         onClose();
       } else if (msg === 'CLIENT_OVERLAP') {
-        toast('You already have a booking at that time — pick another time', 'error');
+        toast(t('booking.errOverlap'), 'error');
         setTime('');
         onBack();
       } else {
-        toast('Could not book — check your connection and try again', 'error');
+        toast(t('booking.errFailed'), 'error');
       }
     } finally {
       setBusy(false);
@@ -170,16 +171,16 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
       {/* Header + progress */}
       <header className="sticky top-0 z-30 border-b border-white/[0.05] bg-ink-950/80 backdrop-blur-xl" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="mx-auto flex h-16 max-w-lg items-center gap-2 px-2">
-          <IconButton label="Back" onClick={onBack}>
-            <ArrowLeft className="size-5" />
+          <IconButton label={t('common.back')} onClick={onBack}>
+            <ArrowLeft className="size-5 rtl:-scale-x-100" />
           </IconButton>
           <div className="min-w-0 flex-1 text-center">
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-ink-500">
-              Step {current + 1} of {STEPS.length}
+              {t('booking.stepOf', { n: current + 1, total: STEPS.length })}
             </p>
-            <p className="truncate font-medium text-cream">{STEPS[current]}</p>
+            <p className="truncate font-medium text-cream">{t(STEPS[current])}</p>
           </div>
-          <IconButton label="Close" onClick={onClose}>
+          <IconButton label={t('common.close')} onClick={onClose}>
             <X className="size-5" />
           </IconButton>
         </div>
@@ -240,18 +241,18 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
                   <p className="font-display text-[26px] leading-tight text-cream">{service.name}</p>
                   <p className="text-sm text-ink-400">
                     with {stylist.name}
-                    {isAny && <span className="text-gold-300/90"> · assigned for you</span>}
+                    {isAny && <span className="text-gold-300/90"> · {t('booking.assigned')}</span>}
                   </p>
                 </div>
               </div>
               <div className="hairline" />
               <dl className="space-y-3 p-5 text-sm">
-                <Line label="Date" value={formatLongDate(date)} />
-                <Line label="Time" value={`${time} – ${endTime(time, service.duration_min)}`} />
-                <Line label="Duration" value={formatDuration(service.duration_min)} />
+                <Line label={t('booking.date')} value={formatLongDate(date)} />
+                <Line label={t('booking.time')} value={`${time} – ${endTime(time, service.duration_min)}`} />
+                <Line label={t('booking.duration')} value={formatDuration(service.duration_min)} />
                 <div className="hairline !my-4" />
                 <div className="flex items-baseline justify-between">
-                  <dt className="text-ink-300">Total</dt>
+                  <dt className="text-ink-300">{t('booking.total')}</dt>
                   <dd className="tnum font-display text-[30px] leading-none text-cream">{formatPrice(service.price)}</dd>
                 </div>
               </dl>
@@ -259,21 +260,22 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
 
             <label className="block">
               <span className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-400">
-                <MessageSquare className="size-3.5" /> Note for your barber (optional)
+                <MessageSquare className="size-3.5" /> {t('booking.noteLabel')}
               </span>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 maxLength={300}
-                placeholder="e.g. Skin fade, #2 on top, keep the length at the front"
+                placeholder={t('booking.notePlaceholder')}
                 className={textareaCls}
               />
             </label>
 
             <p className="flex items-start gap-2.5 text-xs leading-relaxed text-ink-500">
               <Sparkles className="mt-0.5 size-3.5 shrink-0 text-gold-400" />
-              Pay at the shop. {willAutoConfirm(date, time) ? 'Your booking is confirmed instantly.' : `${stylist.name.split(' ')[0]} will confirm your request.`} You can
-              cancel any time from the app.
+              {t('booking.payAtShop')}{' '}
+              {willAutoConfirm(date, time) ? t('booking.confirmedInstantly') : t('booking.willConfirm', { name: stylist.name.split(' ')[0] })}{' '}
+              {t('booking.cancelAnyTime')}
             </p>
           </div>
         )}
@@ -283,14 +285,14 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
       {current === 2 && (
         <Footer>
           <Button variant="gold" size="lg" className="w-full" disabled={!time} onClick={() => onStep(3)}>
-            {time ? `Continue · ${relativeDay(date || todayStr())} at ${time}` : 'Select a time'}
+            {time ? t('booking.continueAt', { day: relativeDay(date || todayStr()), time }) : t('booking.selectTime')}
           </Button>
         </Footer>
       )}
       {current === 3 && (
         <Footer>
           <Button variant="gold" size="lg" className="w-full" loading={busy} icon={!busy && <Check className="size-[18px]" />} onClick={confirm}>
-            {willAutoConfirm(date, time) ? 'Confirm booking' : 'Request booking'}
+            {willAutoConfirm(date, time) ? t('booking.confirmBooking') : t('booking.requestBooking')}
           </Button>
         </Footer>
       )}
@@ -302,7 +304,7 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
 
 function ServiceStep({ selected, onChoose }: { selected: string; onChoose: (id: string) => void }) {
   const services = getServices();
-  if (services.length === 0) return <EmptyState icon={Clock} title="No services available" text="Please check back soon." />;
+  if (services.length === 0) return <EmptyState icon={Clock} title={t('booking.noServices')} text={t('booking.checkBack')} />;
   return (
     <div className="space-y-3">
       {services.map((s) => (
@@ -310,7 +312,7 @@ function ServiceStep({ selected, onChoose }: { selected: string; onChoose: (id: 
           key={s.id}
           onClick={() => onChoose(s.id)}
           className={cx(
-            'w-full rounded-3xl border p-5 text-left transition-all active:scale-[0.99]',
+            'w-full rounded-3xl border p-5 text-start transition-all active:scale-[0.99]',
             selected === s.id
               ? 'border-gold-400/60 bg-gold-400/[0.06]'
               : 'border-white/[0.07] bg-ink-900/80 hover:border-white/[0.14] hover:bg-ink-850'
@@ -342,7 +344,7 @@ function BarberStep({
   onChoose: (id: string, duration: number) => void;
 }) {
   const team = getStylists();
-  if (team.length === 0) return <EmptyState icon={Clock} title="No barbers available" text="Please check back soon." />;
+  if (team.length === 0) return <EmptyState icon={Clock} title={t('booking.noBarbers')} text={t('booking.checkBack')} />;
   const anyNext = firstFree(ANY, duration);
   return (
     <div className="space-y-3">
@@ -350,7 +352,7 @@ function BarberStep({
       <button
         onClick={() => onChoose(ANY, duration)}
         className={cx(
-          'flex w-full items-center gap-4 rounded-3xl border p-3 text-left transition-all active:scale-[0.99]',
+          'flex w-full items-center gap-4 rounded-3xl border p-3 text-start transition-all active:scale-[0.99]',
           selected === ANY
             ? 'border-gold-400/60 bg-gold-400/[0.06]'
             : 'border-gold-400/25 bg-gradient-to-r from-gold-400/[0.07] to-transparent hover:border-gold-400/45'
@@ -359,10 +361,10 @@ function BarberStep({
         <div className="grid h-[92px] w-[92px] shrink-0 place-items-center rounded-2xl border border-gold-400/25 bg-ink-850">
           <Users className="size-8 text-gold-300" strokeWidth={1.4} />
         </div>
-        <div className="min-w-0 flex-1 py-1 pr-1">
-          <p className="text-[17px] font-medium text-cream">Any barber</p>
-          <p className="text-[13px] text-gold-300/90">Fastest option</p>
-          <p className="mt-1.5 text-[13px] leading-snug text-ink-400">We'll book a free barber for your time — whoever is least busy that day.</p>
+        <div className="min-w-0 flex-1 py-1 pe-1">
+          <p className="text-[17px] font-medium text-cream">{t('booking.anyBarber')}</p>
+          <p className="text-[13px] text-gold-300/90">{t('booking.fastest')}</p>
+          <p className="mt-1.5 text-[13px] leading-snug text-ink-400">{t('booking.anyBarberText')}</p>
           <p
             className={cx(
               'mt-2.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px]',
@@ -370,7 +372,7 @@ function BarberStep({
             )}
           >
             <span className={cx('size-1.5 rounded-full', anyNext ? 'bg-emerald-300' : 'bg-ink-500')} />
-            {anyNext ? `Next free: ${relativeDay(anyNext.date)} ${anyNext.time}` : 'Fully booked'}
+            {anyNext ? t('booking.nextFree', { day: relativeDay(anyNext.date), time: anyNext.time }) : t('booking.fullyBooked')}
           </p>
         </div>
       </button>
@@ -382,14 +384,14 @@ function BarberStep({
             key={s.id}
             onClick={() => onChoose(s.id, duration)}
             className={cx(
-              'flex w-full gap-4 rounded-3xl border p-3 text-left transition-all active:scale-[0.99]',
+              'flex w-full gap-4 rounded-3xl border p-3 text-start transition-all active:scale-[0.99]',
               selected === s.id
                 ? 'border-gold-400/60 bg-gold-400/[0.06]'
                 : 'border-white/[0.07] bg-ink-900/80 hover:border-white/[0.14] hover:bg-ink-850'
             )}
           >
             <Portrait name={s.name} src={s.image} className="w-[92px] shrink-0 rounded-2xl" />
-            <div className="min-w-0 flex-1 py-1 pr-1">
+            <div className="min-w-0 flex-1 py-1 pe-1">
               <p className="text-[17px] font-medium text-cream">{s.name}</p>
               <p className="text-[13px] text-gold-300/90">{s.title}</p>
               {s.bio && <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-ink-400">{s.bio}</p>}
@@ -400,7 +402,7 @@ function BarberStep({
                 )}
               >
                 <span className={cx('size-1.5 rounded-full', next ? 'bg-emerald-300' : 'bg-ink-500')} />
-                {next ? `Next free: ${relativeDay(next.date)} ${next.time}` : 'Fully booked'}
+                {next ? t('booking.nextFree', { day: relativeDay(next.date), time: next.time }) : t('booking.fullyBooked')}
               </p>
             </div>
           </button>
@@ -439,14 +441,14 @@ function TimeStep({
     const closed = !getHoursFor(d);
     const off = !isAny && isDayOff(stylistId, d);
     const free = closed || off ? 0 : startsFor(stylistId, d, duration, userId).length;
-    return { date: d, disabled: free === 0, note: closed ? 'Closed' : off ? 'Off' : free === 0 ? 'Full' : undefined };
+    return { date: d, disabled: free === 0, note: closed ? t('strip.closed') : off ? t('strip.off') : free === 0 ? t('strip.full') : undefined };
   });
 
   const starts = startsFor(stylistId, date, duration, userId);
   const groups = [
-    { label: 'Morning', times: starts.filter((t) => t < '12:00') },
-    { label: 'Afternoon', times: starts.filter((t) => t >= '12:00' && t < '17:00') },
-    { label: 'Evening', times: starts.filter((t) => t >= '17:00') },
+    { label: t('booking.morning'), times: starts.filter((x) => x < '12:00') },
+    { label: t('booking.afternoon'), times: starts.filter((x) => x >= '12:00' && x < '17:00') },
+    { label: t('booking.evening'), times: starts.filter((x) => x >= '17:00') },
   ].filter((g) => g.times.length);
 
   const firstOpen = items.find((i) => !i.disabled)?.date;
@@ -459,7 +461,7 @@ function TimeStep({
       {stale && (
         <p role="alert" className="mt-4 flex gap-2.5 rounded-2xl border border-amber-300/25 bg-amber-400/[0.08] px-4 py-3 text-sm text-amber-100">
           <Clock className="mt-0.5 size-4 shrink-0 text-amber-300" />
-          That time is no longer available — please pick another.
+          {t('booking.timeGone')}
         </p>
       )}
 
@@ -470,16 +472,16 @@ function TimeStep({
               icon={Clock}
               title={
                 !getHoursFor(date)
-                  ? 'The shop is closed this day'
+                  ? t('booking.shopClosed')
                   : !isAny && isDayOff(stylistId, date)
-                    ? 'Your barber is off this day'
-                    : 'Fully booked'
+                    ? t('booking.barberOff')
+                    : t('booking.fullyBooked')
               }
-              text="Try another day."
+              text={t('booking.tryAnother')}
               action={
                 firstOpen && firstOpen !== date ? (
                   <Button variant="subtle" size="sm" onClick={() => onDate(firstOpen)}>
-                    Jump to {relativeDay(firstOpen)}
+                    {t('booking.jumpTo', { day: relativeDay(firstOpen) })}
                   </Button>
                 ) : undefined
               }
@@ -517,7 +519,7 @@ function SummaryChip({ children, onClick }: { children: ReactNode; onClick: () =
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] py-1.5 pl-2.5 pr-3 text-[12.5px] text-ink-200 transition hover:border-gold-400/40"
+      className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] py-1.5 ps-2.5 pe-3 text-[12.5px] text-ink-200 transition hover:border-gold-400/40"
     >
       {children}
     </button>
@@ -528,7 +530,7 @@ function Line({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4">
       <dt className="text-ink-400">{label}</dt>
-      <dd className="tnum text-right text-cream">{value}</dd>
+      <dd className="tnum text-end text-cream">{value}</dd>
     </div>
   );
 }

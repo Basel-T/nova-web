@@ -21,7 +21,8 @@ import {
   useStoreVersion,
   verifyStaffSession,
 } from './store';
-import { Button, DialogHost, LoadingScreen, Toaster, toast } from './ui';
+import { Button, DialogHost, LoadingScreen, Toaster, closeOverlays, toast } from './ui';
+import { t, useLang } from './i18n';
 
 import Login from './pages/Login';
 import ClientApp from './pages/client/ClientHome';
@@ -30,6 +31,7 @@ import AdminPanel from './pages/admin/AdminPanel';
 
 export default function App() {
   useStoreVersion();
+  useLang(); // re-render the whole app when the language changes
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [user, setUser] = useState<User | null>(null);
 
@@ -71,24 +73,30 @@ export default function App() {
     if (user && live && live.role !== user.role) {
       logout();
       setUser(null);
-      toast('Your access changed — please sign in again', 'info');
+      toast(t('app.accessChanged'), 'info');
     }
   }, [user, live]);
 
   const handleLogout = () => {
+    closeOverlays(); // nothing from the previous role stays on screen
     logout();
     setUser(null);
   };
 
+  // Every screen change (sign in, sign out, switching role) starts at the top
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [user?.id, user?.role]);
+
   if (!isConfigured) {
     return (
       <div className="page-glow flex min-h-dvh items-center justify-center p-6 text-center">
-        <p className="text-ink-300">Database not connected — add the Supabase keys in src/config.ts.</p>
+        <p className="text-ink-300">{t('app.notConfigured')}</p>
       </div>
     );
   }
 
-  if (status === 'loading') return <LoadingScreen message="Opening the shop…" />;
+  if (status === 'loading') return <LoadingScreen message={t('common.loading')} />;
 
   if (status === 'error') {
     return (
@@ -96,10 +104,10 @@ export default function App() {
         <div className="grid size-14 place-items-center rounded-full border border-white/10 bg-white/[0.03]">
           <WifiOff className="size-6 text-gold-300" strokeWidth={1.5} />
         </div>
-        <h1 className="font-display text-3xl text-cream">Can't reach the shop</h1>
-        <p className="max-w-xs text-sm text-ink-400">Check your internet connection and try again.</p>
+        <h1 className="font-display text-3xl text-cream">{t('app.offlineTitle')}</h1>
+        <p className="max-w-xs text-sm text-ink-400">{t('app.offlineText')}</p>
         <Button variant="gold" onClick={connect} className="mt-2">
-          Try again
+          {t('app.tryAgain')}
         </Button>
       </div>
     );

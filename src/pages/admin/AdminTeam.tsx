@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Camera, ImageOff, KeyRound, Plus, Trash2, UserPlus } from 'lucide-react';
 import type { Stylist } from '../../types';
 import {
+  errorText,
   addStylist,
   getAppointments,
   getStylists,
@@ -16,8 +17,9 @@ import {
 } from '../../store';
 import { Button, Card, EmptyState, Field, Portrait, Sheet, Toggle, confirmDialog, cx, inputCls, textareaCls, toast } from '../../ui';
 import { todayStr } from '../../lib/time';
-import { cleanNumber } from '../../lib/util';
+import { cleanNumber, digitCount } from '../../lib/util';
 import { DEMO_ACCOUNTS, DEMO_MODE } from '../../config';
+import { t } from '../../i18n';
 
 export default function AdminTeam() {
   useStoreVersion();
@@ -29,7 +31,7 @@ export default function AdminTeam() {
     <div className="space-y-4">
       {team.length === 0 ? (
         <Card>
-          <EmptyState icon={UserPlus} title="No barbers yet" text="Add your first barber to start taking bookings." />
+          <EmptyState icon={UserPlus} title={t('team.empty')} text={t('team.emptyText')} />
         </Card>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -49,13 +51,13 @@ export default function AdminTeam() {
                         s.active ? 'bg-emerald-400/10 text-emerald-200' : 'bg-white/[0.06] text-ink-300'
                       )}
                     >
-                      {s.active ? 'Booking' : 'Paused'}
+                      {s.active ? t('team.booking') : t('team.paused')}
                     </span>
                   </div>
                   <p className="text-[13px] text-gold-300/90">{s.title}</p>
-                  <p className="tnum mt-2 text-xs text-ink-400">Login {s.mobile_number}</p>
+                  <p className="tnum mt-2 text-xs text-ink-400">{t('team.login')} <span dir="ltr">{s.mobile_number}</span></p>
                   <p className="text-xs text-ink-500">
-                    {upcoming} upcoming booking{upcoming === 1 ? '' : 's'}
+                    {t('team.upcoming', { n: upcoming })}
                   </p>
                 </div>
               </Card>
@@ -65,7 +67,7 @@ export default function AdminTeam() {
       )}
 
       <Button variant="gold" size="lg" className="w-full" icon={<Plus className="size-[18px]" />} onClick={() => setEditing('new')}>
-        Add a barber
+        {t('team.add')}
       </Button>
 
       {editing && <BarberForm stylist={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
@@ -79,7 +81,7 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
   const locked = DEMO_MODE && stylist?.mobile_number === DEMO_ACCOUNTS.barber.mobile;
   const pwLocked = DEMO_MODE && !isNew;
   const [name, setName] = useState(stylist?.name ?? '');
-  const [title, setTitle] = useState(stylist?.title ?? 'Barber');
+  const [title, setTitle] = useState(stylist?.title ?? t('client.barber'));
   const [bio, setBio] = useState(stylist?.bio ?? '');
   const [mobile, setMobile] = useState(stylist?.mobile_number ?? '');
   const [active, setActive] = useState(stylist?.active ?? true);
@@ -95,7 +97,7 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
 
   const pickPhoto = (file: File | undefined) => {
     if (!file) return;
-    if (!file.type.startsWith('image/')) return toast('Please choose an image file', 'error');
+    if (!file.type.startsWith('image/')) return toast(t('team.chooseImage'), 'error');
     setPhoto({ kind: 'upload', file });
     setPreview(URL.createObjectURL(file));
   };
@@ -103,29 +105,20 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
   const save = async () => {
     if (locked) return;
     const number = cleanNumber(mobile);
-    if (name.trim().length < 2) return setError('Enter the barber’s name');
-    if (number.length < 3) return setError('Enter a login number — the barber uses it to sign in');
-    if (isNew && password.length < 3) return setError('Set a password of at least 3 characters');
-    if (!isNew && password && password.length < 3) return setError('Password must be at least 3 characters');
+    if (name.trim().length < 2) return setError(t('team.errName'));
+    if (digitCount(number) < 3) return setError(t('team.errNumber'));
+    if (isNew && password.length < 3) return setError(t('team.errPassword'));
+    if (!isNew && password && password.length < 3) return setError(t('team.errPassword'));
     setError('');
     setSaving(true);
-    const input = { name: name.trim(), title: title.trim() || 'Barber', bio: bio.trim(), mobile_number: number, active };
+    const input = { name: name.trim(), title: title.trim() || t('client.barber'), bio: bio.trim(), mobile_number: number, active };
     try {
       if (isNew) await addStylist(input, password, photo);
       else await updateStylist(stylist.id, input, password, photo);
-      toast(isNew ? `${input.name} added to the team` : 'Changes saved');
+      toast(isNew ? t('team.added', { name: input.name }) : t('team.saved'));
       onClose();
     } catch (e) {
-      const msg = (e as Error).message || '';
-      setError(
-        msg.includes('duplicate') || msg.includes('unique')
-          ? 'That mobile number already belongs to another barber'
-          : msg.includes('already')
-            ? msg
-            : msg.includes('authorized')
-            ? 'Your admin session expired — sign out and in again'
-            : `Could not save: ${msg}`
-      );
+      setError(errorText(e));
       setSaving(false);
     }
   };
@@ -133,19 +126,19 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
   const remove = async () => {
     if (!stylist || locked) return;
     const ok = await confirmDialog({
-      title: `Remove ${stylist.name}?`,
-      message: 'They will disappear from the booking app and lose barber access. Past bookings and analytics are kept.',
-      confirmText: 'Remove',
-      cancelText: 'Keep',
+      title: t('team.removeTitle', { name: stylist.name }),
+      message: t('team.removeText'),
+      confirmText: t('barber.remove'),
+      cancelText: t('common.keep'),
       destructive: true,
     });
     if (!ok) return;
     try {
       await removeStylist(stylist.id);
-      toast(`${stylist.name} removed`);
+      toast(t('team.removed', { name: stylist.name }));
       onClose();
     } catch {
-      toast('Could not remove — please try again', 'error');
+      toast(t('team.removeFailed'), 'error');
     }
   };
 
@@ -153,19 +146,19 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
     <Sheet
       open
       onClose={onClose}
-      title={isNew ? 'New barber' : 'Edit barber'}
+      title={isNew ? t('team.newTitle') : t('team.editTitle')}
       footer={
         locked ? (
-          <p className="py-2 text-center text-sm text-ink-300">Locked in the demo — used by “Try as Barber”.</p>
+          <p className="py-2 text-center text-sm text-ink-300">{t('team.lockedFooter')}</p>
         ) : (
         <div className="flex gap-2.5">
           {!isNew && (
             <Button variant="danger" onClick={remove} icon={<Trash2 className="size-4" />}>
-              Remove
+              {t('barber.remove')}
             </Button>
           )}
           <Button variant="gold" className="flex-1" loading={saving} onClick={save}>
-            {isNew ? 'Add barber' : 'Save changes'}
+            {isNew ? t('team.addBarber') : t('team.saveChanges')}
           </Button>
         </div>
         )
@@ -174,17 +167,17 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
       {locked && (
         <p className="mb-5 flex gap-2.5 rounded-2xl border border-gold-400/25 bg-gold-400/[0.07] px-4 py-3 text-sm text-gold-100">
           <KeyRound className="mt-0.5 size-4 shrink-0 text-gold-300" />
-          {stylist?.name} is the demo barber behind “Try as Barber”, so he can't be edited or removed in the demo. Try editing another barber.
+          {t('team.lockedText', { name: stylist?.name ?? '' })}
         </p>
       )}
       <fieldset disabled={locked} className="space-y-5 disabled:opacity-60">
         {/* Photo */}
         <div className="flex items-end gap-4">
-          <Portrait name={name || 'New barber'} src={shownPhoto} className="w-[120px] shrink-0 rounded-3xl border border-white/[0.08]" />
+          <Portrait name={name || t('team.newTitle')} src={shownPhoto} className="w-[120px] shrink-0 rounded-3xl border border-white/[0.08]" />
           <div className="flex-1 space-y-2">
             <label className="inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-white/[0.06] text-sm font-medium text-cream transition hover:bg-white/[0.1]">
               <Camera className="size-4" />
-              {shownPhoto ? 'Change photo' : 'Upload photo'}
+              {shownPhoto ? t('team.changePhoto') : t('team.uploadPhoto')}
               <input type="file" accept="image/*" className="hidden" onChange={(e) => pickPhoto(e.target.files?.[0])} />
             </label>
             {shownPhoto && (
@@ -196,41 +189,41 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
                 }}
                 className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl text-sm text-ink-400 transition hover:bg-white/[0.04] hover:text-cream"
               >
-                <ImageOff className="size-4" /> Remove photo
+                <ImageOff className="size-4" /> {t('team.removePhoto')}
               </button>
             )}
-            <p className="text-[11px] leading-snug text-ink-500">Portrait photos work best — it’s cropped to 4:5 automatically.</p>
+            <p className="text-[11px] leading-snug text-ink-500">{t('team.photoHint')}</p>
           </div>
         </div>
 
-        <Field label="Full name">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Marcus Cole" className={inputCls} />
+        <Field label={t('login.fullName')}>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('team.namePlaceholder')} className={inputCls} />
         </Field>
-        <Field label="Title">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Fade Specialist" className={inputCls} />
+        <Field label={t('team.title')}>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('team.titlePlaceholder')} className={inputCls} />
         </Field>
-        <Field label="Bio" hint="Shown to clients when they choose a barber.">
-          <textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} placeholder="Specialities, experience…" className={textareaCls} />
+        <Field label={t('team.bio')} hint={t('team.bioHint')}>
+          <textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} placeholder={t('team.bioPlaceholder')} className={textareaCls} />
         </Field>
-        <Field label="Login number">
-          <input value={mobile} onChange={(e) => setMobile(e.target.value)} type="tel" inputMode="tel" placeholder="e.g. 444" className={cx(inputCls, 'tnum')} />
+        <Field label={t('team.loginNumber')}>
+          <input value={mobile} onChange={(e) => setMobile(e.target.value)} type="tel" inputMode="tel" dir="ltr" placeholder={t('team.loginPlaceholder')} className={cx(inputCls, 'tnum text-start')} />
         </Field>
         {pwLocked ? (
-          <Field label="Password">
+          <Field label={t('login.password')}>
             <p className="flex items-center gap-2.5 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-sm text-ink-300">
-              <KeyRound className="size-4 text-ink-400" /> Disabled in the demo
+              <KeyRound className="size-4 text-ink-400" /> {t('demo.disabled')}
             </p>
           </Field>
         ) : (
-          <Field label={isNew ? 'Password' : 'New password'} hint={isNew ? 'The barber signs in with their number and this password.' : 'Leave empty to keep the current password.'}>
+          <Field label={isNew ? t('login.password') : t('team.newPassword')} hint={isNew ? t('team.passwordHint') : t('team.passwordKeep')}>
             <div className="relative">
-              <KeyRound className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-ink-500" />
-              <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder={isNew ? 'At least 3 characters' : '••••'} className={cx(inputCls, 'pl-10')} />
+              <KeyRound className="pointer-events-none absolute start-4 top-1/2 size-4 -translate-y-1/2 text-ink-500" />
+              <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder={isNew ? t('team.passwordMin') : '••••'} className={cx(inputCls, 'ps-10')} />
             </div>
           </Field>
         )}
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
-          <Toggle checked={active} onChange={setActive} label="Taking bookings" description="Turn off to hide this barber from clients (e.g. holiday)." />
+          <Toggle checked={active} onChange={setActive} label={t('team.takingBookings')} description={t('team.takingBookingsText')} />
         </div>
       </fieldset>
       {error && <p className="mt-4 text-sm text-rose-300">{error}</p>}

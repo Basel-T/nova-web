@@ -3,6 +3,7 @@
 // ============================================================
 
 import { endTime } from './time';
+import { t } from '../i18n';
 
 /** Trigger a file download in the browser */
 export function downloadFile(filename: string, content: string, mime: string): void {
@@ -52,7 +53,7 @@ export function downloadIcs(opts: {
     'BEGIN:VALARM',
     'TRIGGER:-PT1H',
     'ACTION:DISPLAY',
-    'DESCRIPTION:Appointment reminder',
+    `DESCRIPTION:${esc(t('ics.reminder'))}`,
     'END:VALARM',
     'END:VEVENT',
     'END:VCALENDAR',
@@ -64,7 +65,20 @@ export function mapsUrl(address: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 }
 
-/** Keep digits only so "050-123 4567" and "0501234567" match */
+/**
+ * Store phone numbers cleaned: digits only, keeping one leading "+" for
+ * international numbers ("+49 151 2345 6789" → "+4915123456789").
+ * "0049…" is treated like "+49…".
+ */
 export function cleanNumber(s: string): string {
-  return s.replace(/\D/g, '');
+  const raw = s.trim();
+  const digits = raw.replace(/\D/g, '');
+  if (raw.startsWith('+')) return '+' + digits;
+  if (digits.startsWith('00') && digits.length > 4) return '+' + digits.slice(2);
+  return digits;
+}
+
+/** How many digits a (cleaned) number has — "+" doesn't count */
+export function digitCount(s: string): number {
+  return s.replace(/\D/g, '').length;
 }

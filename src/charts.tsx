@@ -9,6 +9,7 @@
 
 import { ReactNode, useState } from 'react';
 import { cx } from './ui';
+import { isRtl, t } from './i18n';
 
 export interface BarDatum {
   key: string;
@@ -31,7 +32,7 @@ export function BarChart({
   data,
   format,
   height = 168,
-  emptyText = 'No data for this period yet',
+  emptyText,
   title,
   integer = false,
 }: {
@@ -48,7 +49,7 @@ export function BarChart({
   if (max === 0) {
     return (
       <div style={{ height }} className="grid place-items-center rounded-2xl border border-dashed border-white/[0.07] text-sm text-ink-500">
-        {emptyText}
+        {emptyText ?? t('charts.empty')}
       </div>
     );
   }
@@ -57,7 +58,10 @@ export function BarChart({
   const n = data.length;
   const labelEvery = Math.ceil(n / 8);
   const a = active !== null ? data[active] : null;
-  const align = active === null ? '' : active < n * 0.2 ? 'translate-x-0' : active > n * 0.8 ? '-translate-x-full' : '-translate-x-1/2';
+  // Tooltip anchored at the bar, kept inside the chart near the edges (mirrors in RTL)
+  const rtl = isRtl();
+  const shift = active === null ? 0 : active < n * 0.2 ? 0 : active > n * 0.8 ? -100 : -50;
+  const tooltipTransform = `translate(${rtl ? -shift : shift}%, -100%)`;
 
   return (
     <div>
@@ -66,12 +70,12 @@ export function BarChart({
         {[1, 0.5, 0].map((f) => (
           <div key={f} className="absolute inset-x-0 flex items-center gap-2" style={{ bottom: `${f * 100}%` }}>
             <div className={cx('h-px flex-1', f === 0 ? 'bg-white/[0.12]' : 'bg-white/[0.05]')} />
-            <span className="tnum w-12 -translate-y-px text-right text-[10px] text-ink-500">{f === 0 ? '' : format(top * f)}</span>
+            <span className="tnum w-12 -translate-y-px text-end text-[10px] text-ink-500">{f === 0 ? '' : format(top * f)}</span>
           </div>
         ))}
 
         {/* Bars */}
-        <div className="absolute inset-y-0 left-0 right-14 flex items-end gap-[2px]">
+        <div className="absolute inset-y-0 start-0 end-14 flex items-end gap-[2px]">
           {data.map((d, i) => {
             const h = d.value > 0 ? Math.max(2, (d.value / top) * 100) : 0;
             const isActive = active === i;
@@ -100,8 +104,8 @@ export function BarChart({
         {/* Tooltip */}
         {a && active !== null && (
           <div
-            className={cx('pointer-events-none absolute -top-2 z-10 -translate-y-full', align)}
-            style={{ left: `calc((100% - 56px) * ${(active + 0.5) / n})` }}
+            className="pointer-events-none absolute -top-2 z-10"
+            style={{ insetInlineStart: `calc((100% - 56px) * ${(active + 0.5) / n})`, transform: tooltipTransform }}
           >
             <div className="whitespace-nowrap rounded-xl border border-white/10 bg-ink-800/95 px-3 py-2 text-xs shadow-xl backdrop-blur">
               <div className="text-ink-400">{a.tooltip}</div>
@@ -113,7 +117,7 @@ export function BarChart({
       </div>
 
       {/* X labels */}
-      <div className="mr-14 mt-2 flex gap-[2px]">
+      <div className="me-14 mt-2 flex gap-[2px]">
         {data.map((d, i) => (
           <span key={d.key} className="tnum min-w-0 flex-1 truncate text-center text-[10px] text-ink-500">
             {i % labelEvery === 0 ? d.label : ''}
@@ -146,9 +150,9 @@ export interface RankRow {
 }
 
 /** Ranked horizontal bars (barbers, services, clients…) */
-export function RankList({ rows, emptyText = 'Nothing here yet' }: { rows: RankRow[]; emptyText?: string }) {
+export function RankList({ rows, emptyText }: { rows: RankRow[]; emptyText?: string }) {
   const max = Math.max(0, ...rows.map((r) => r.value));
-  if (rows.length === 0 || max === 0) return <p className="py-6 text-center text-sm text-ink-500">{emptyText}</p>;
+  if (rows.length === 0 || max === 0) return <p className="py-6 text-center text-sm text-ink-500">{emptyText ?? t('charts.nothing')}</p>;
   return (
     <ul className="divide-y divide-white/[0.05]">
       {rows.map((r) => (

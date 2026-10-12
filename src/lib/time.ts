@@ -1,12 +1,21 @@
 // ============================================================
-// time.ts — Date & time helpers
+// time.ts — Date & time helpers (translated, 24-hour, Monday-first)
 // ============================================================
 // Dates are local "YYYY-MM-DD" strings, times are "HH:MM" (24h).
 // Minutes-since-midnight numbers are used for all time maths.
+// Names of days/months come from Intl in the active language.
 // ============================================================
 
-export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-export const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+import { getLocale, t } from '../i18n';
+
+/** Weekdays in display order: Monday first (Europe) — values are JS getDay() numbers */
+export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+/** Localised weekday name for getDay() number (0 = Sunday) */
+export function weekdayName(day: number, style: 'long' | 'short' = 'long'): string {
+  // 7 Jan 2024 was a Sunday
+  return new Intl.DateTimeFormat(getLocale(), { weekday: style }).format(new Date(2024, 0, 7 + day));
+}
 
 /** "10:30" → 630 */
 export function toMin(time: string): number {
@@ -57,66 +66,86 @@ export function tsToDateStr(ts: string): string {
   return toDateStr(new Date(ts));
 }
 
-/** Timestamp (ISO) → local "HH:MM" */
+/** Timestamp (ISO) → local "HH:MM" (24h) */
 export function tsToTime(ts: string): string {
   const d = new Date(ts);
   return fromMin(d.getHours() * 60 + d.getMinutes());
+}
+
+/** Timestamp (ISO) → "12 Oct 2026, 14:38" in the active language, 24h */
+export function formatTimestamp(ts: string): string {
+  return new Intl.DateTimeFormat(getLocale(), {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(ts));
 }
 
 export function endTime(time: string, durationMin: number): string {
   return fromMin(toMin(time) + durationMin);
 }
 
-/** 45 → "45 min", 90 → "1h 30m", 120 → "2h" */
+/** 45 → "45 min", 90 → "1 h 30 min", 120 → "2 h" (translated) */
 export function formatDuration(min: number): string {
   const h = Math.floor(min / 60);
   const m = min % 60;
-  if (!h) return `${m} min`;
-  return m ? `${h}h ${m}m` : `${h}h`;
+  if (!h) return t('time.durMin', { n: m });
+  return m ? t('time.durHourMin', { h, m }) : t('time.durHour', { h });
 }
 
-/** "Monday, October 6" */
+const fmt = (date: string, opts: Intl.DateTimeFormatOptions) =>
+  new Intl.DateTimeFormat(getLocale(), opts).format(parseDate(date));
+
+/** "Monday, 6 October" (word order follows the language) */
 export function formatLongDate(date: string): string {
-  return parseDate(date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  return fmt(date, { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
-/** "Mon, Oct 6" */
+/** "Mon, 6 Oct" */
 export function formatShortDate(date: string): string {
-  return parseDate(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return fmt(date, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-/** "Oct 6" */
+/** "6 Oct" */
 export function formatMonthDay(date: string): string {
-  return parseDate(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return fmt(date, { month: 'short', day: 'numeric' });
 }
 
-/** "Today" / "Tomorrow" / "Yesterday" / "Mon, Oct 6" */
+/** "Oct" */
+export function formatMonthShort(date: string): string {
+  return fmt(date, { month: 'short' });
+}
+
+/** "Today" / "Tomorrow" / "Yesterday" / "Mon, 6 Oct" */
 export function relativeDay(date: string): string {
-  const t = todayStr();
-  if (date === t) return 'Today';
-  if (date === addDays(t, 1)) return 'Tomorrow';
-  if (date === addDays(t, -1)) return 'Yesterday';
+  const today = todayStr();
+  if (date === today) return t('time.today');
+  if (date === addDays(today, 1)) return t('time.tomorrow');
+  if (date === addDays(today, -1)) return t('time.yesterday');
   return formatShortDate(date);
 }
 
-/** "in 3 days", "in 2 hours", "starting soon" — for an upcoming appointment */
+/** "in 3 days", "in 2 h", "now" — for an upcoming appointment */
 export function countdown(date: string, time: string): string {
   const start = new Date(`${date}T${time}:00`).getTime();
   const diffMin = Math.round((start - Date.now()) / 60000);
-  if (diffMin <= 0) return 'Now';
-  if (diffMin < 60) return `in ${diffMin} min`;
+  if (diffMin <= 0) return t('time.now');
+  if (diffMin < 60) return t('time.inMinutes', { n: diffMin });
   const days = daysBetween(todayStr(), date);
-  if (days === 0) return `in ${Math.round(diffMin / 60)} h`;
-  if (days === 1) return 'Tomorrow';
-  return `in ${days} days`;
+  if (days === 0) return t('time.inHours', { n: Math.round(diffMin / 60) });
+  if (days === 1) return t('time.tomorrow');
+  return t('time.inDays', { n: days });
 }
 
 export function greeting(): string {
   const h = new Date().getHours();
-  if (h < 5) return 'Good evening';
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (h < 5) return t('greet.evening');
+  if (h < 12) return t('greet.morning');
+  if (h < 18) return t('greet.afternoon');
+  return t('greet.evening');
 }
 
 /** Times between start and end (inclusive) every `step` minutes */

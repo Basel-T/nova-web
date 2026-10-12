@@ -30,7 +30,8 @@ import type {
   Stylist,
   User,
 } from './types';
-import { addDays, daysBetween, formatShortDate, fromMin, toDateStr, toMin, todayStr, weekdayOf } from './lib/time';
+import { addDays, daysBetween, formatDuration, formatShortDate, fromMin, toDateStr, toMin, todayStr, weekdayOf } from './lib/time';
+import { getLang, getLocale, t, tIn, type Lang, type MessageKey, type Vars } from './i18n';
 
 export const isConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
@@ -51,9 +52,10 @@ export const DEFAULT_SETTINGS: Settings = {
   id: 'shop',
   shop_name: 'Blade & Fade',
   tagline: 'Barbershop',
-  address: '12 Main Street',
+  address: '12 Market Square',
   phone: '',
-  currency: '$',
+  currency: 'EUR',
+  privacy_contact: '',
   hours: DEFAULT_HOURS,
   slot_interval: 15,
   booking_window_days: 30,
@@ -260,7 +262,7 @@ export async function staffLogin(mobile: string, password: string): Promise<User
   if (!data) return null;
   const { token, user } = data as { token: string; user: User };
   saveSession({ user, token });
-  logActivity('staff_login', `${user.full_name} signed in`, {
+  logActivity('staff_login', { name: user.full_name }, {
     stylist_id: user.role === 'stylist' ? getStylistByMobile(user.mobile_number)?.id : undefined,
   });
   autoCompletePastBookings().catch(console.error);
@@ -278,7 +280,7 @@ export async function verifyStaffSession(session: Session): Promise<boolean> {
 /** Admin: set or reset a staff member's password */
 export async function adminSetPassword(userId: string, password: string): Promise<void> {
   const token = getSession()?.token;
-  if (!token) throw new Error('Please sign in again');
+  if (!token) throw new Error('SIGN_IN_AGAIN');
   const { error } = await db().rpc('admin_set_staff_password', {
     p_token: token,
     p_user_id: userId,
@@ -290,7 +292,7 @@ export async function adminSetPassword(userId: string, password: string): Promis
 /** Admin (demo mode): wipe bookings & activity, restore demo data (supabase/update-3.sql) */
 export async function resetDemo(): Promise<void> {
   const token = getSession()?.token;
-  if (!token) throw new Error('Please sign in again');
+  if (!token) throw new Error('SIGN_IN_AGAIN');
   const { error } = await db().rpc('reset_demo', { p_token: token });
   if (error) throw new Error(error.message);
   await refreshAll();
@@ -300,10 +302,16 @@ export async function resetDemo(): Promise<void> {
 // ACTIVITY LOG
 // ============================================================
 
+/** Details stored with a log entry; the text is built from them in the reader's language */
+export type ActivityChange = { c: string; from?: string | number; to?: string | number };
+export type ActivityParams = {
+  [k: string]: string | number | boolean | null | undefined | string[] | ActivityChange[];
+};
+
 /** Record something that happened (fire-and-forget) */
 export function logActivity(
   type: string,
-  message: string,
+  params: ActivityParams,
   extra: { stylist_id?: string | null; appointment_id?: string | null; amount?: number | null; system?: boolean } = {}
 ): void {
   if (!supabase) return;
@@ -312,7 +320,9 @@ export function logActivity(
     id: newId('ev'),
     created_at: new Date().toISOString(),
     type,
-    message,
+    params,
+    // English copy for anything that can't read params
+    message: activityText({ type, params, message: '' }, 'en'),
     actor_id: actor?.id ?? null,
     actor_name: extra.system ? 'System' : actor?.full_name ?? null,
     actor_role: extra.system ? 'system' : actor?.role ?? null,
@@ -342,6 +352,74 @@ export function getActivity(): ActivityEvent[] {
   return activity;
 }
 
+function changeText(ch: ActivityChange, language: Lang): string {
+  const vars: Vars = {};
+  if (ch.c === 'price') {
+    vars.from = formatPrice(Number(ch.from));
+    vars.to = formatPrice(Number(ch.to));
+  } else if (ch.c === 'time') {
+    vars.from = formatDuration(Number(ch.from));
+    vars.to = formatDuration(Number(ch.to));
+  } else {
+    if (ch.from != null) vars.from = ch.from;
+    if (ch.to != null) vars.to = ch.to;
+  }
+  return tIn(language, `change.${ch.c}` as MessageKey, vars);
+}
+
+/** Log types that have a translated template */
+const ACTIVITY_TYPES = new Set([
+  'staff_login', 'client_signup', 'barber_added', 'barber_updated', 'barber_removed',
+  'service_added', 'service_updated', 'service_deleted', 'settings_updated',
+  'booking_created', 'booking_confirmed', 'booking_declined', 'booking_cancelled',
+  'booking_completed', 'booking_auto_completed', 'booking_no_show', 'booking_expired',
+  'time_blocked', 'time_unblocked', 'day_off', 'day_on', 'demo_reset',
+]);
+
+/**
+ * The text of a log entry in the reader's language. Newer entries carry
+ * `params` and are rebuilt from a translated template; older entries
+ * (from before translations) fall back to their stored English message.
+ */
+export function activityText(
+  e: { type: string; params?: ActivityParams | null; message: string },
+  language: Lang = getLang()
+): string {
+  const p = e.params;
+  if (!p || !ACTIVITY_TYPES.has(e.type)) return e.message;
+  const vars: Vars = {};
+  for (const [k, v] of Object.entries(p)) if (typeof v === 'string' || typeof v === 'number') vars[k] = v;
+  let text = tIn(language, `activity.${e.type}` as MessageKey, vars);
+  if (Array.isArray(p.changes) && p.changes.length) {
+    text += ': ' + (p.changes as ActivityChange[]).map((c) => changeText(c, language)).join(', ');
+  }
+  if (Array.isArray(p.fields) && p.fields.length) {
+    text += ': ' + (p.fields as string[]).map((f) => tIn(language, `setting.${f}` as MessageKey)).join(', ');
+  }
+  // Booking / schedule details — names and numbers read the same in every language
+  const details: string[] = [];
+  if (typeof p.service === 'string') details.push(p.service);
+  if (typeof p.barber === 'string') details.push(p.barber);
+  if (typeof p.date === 'string') details.push(formatShortDate(p.date) + (typeof p.time === 'string' ? ` ${p.time}` : ''));
+  if (typeof p.price === 'number') details.push(formatPrice(p.price));
+  if (typeof p.minutes === 'number') details.push(formatDuration(p.minutes));
+  if (typeof p.note === 'string' && p.note) details.push(p.note);
+  if (details.length) text += ' · ' + details.join(' · ');
+  if (p.auto) text += ` (${tIn(language, 'activity.autoConfirmed')})`;
+  return text;
+}
+
+/** Friendly, translated text for an error thrown anywhere in the app */
+export function errorText(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e ?? '');
+  if (msg === 'SIGN_IN_AGAIN' || /authori[sz]ed/i.test(msg)) return t('errors.signInAgain');
+  if (msg === 'NUMBER_TAKEN' || /duplicate|unique/i.test(msg)) return t('errors.numberTaken');
+  if (msg === 'BAD_IMAGE') return t('errors.badImage');
+  if (msg === 'NOT_FOUND') return t('errors.notFound');
+  if (msg === 'SLOT_TAKEN') return t('errors.slotTaken');
+  return t('errors.generic');
+}
+
 // ============================================================
 // SETTINGS
 // ============================================================
@@ -355,20 +433,6 @@ export function getHoursFor(date: string): DayHours | null {
   return getSettings().hours[String(weekdayOf(date))] ?? null;
 }
 
-const SETTING_LABELS: Partial<Record<keyof Settings, string>> = {
-  shop_name: 'shop name',
-  tagline: 'tagline',
-  address: 'address',
-  phone: 'phone',
-  currency: 'currency',
-  hours: 'opening hours',
-  slot_interval: 'time-slot interval',
-  booking_window_days: 'booking window',
-  min_notice_min: 'minimum notice',
-  auto_confirm: 'auto-confirm',
-  max_upcoming: 'max upcoming bookings',
-};
-
 export async function saveSettings(patch: Partial<Settings>): Promise<void> {
   const before = getSettings();
   const next: Settings = { ...before, ...patch, id: 'shop' };
@@ -379,20 +443,59 @@ export async function saveSettings(patch: Partial<Settings>): Promise<void> {
   cache.settings = [next];
   emitChange();
   await write(db().from('settings').upsert({ ...next, updated_at: new Date().toISOString() }));
-  logActivity(
-    'settings_updated',
-    `Shop settings updated: ${changed.map((k) => SETTING_LABELS[k] ?? k).join(', ')}`
-  );
+  logActivity('settings_updated', { fields: changed.filter((k) => k !== 'id') });
 }
 
-/** "$25", "$1,250", "AED 40" — uses the shop's currency */
+/** Symbols saved by older versions → ISO currency codes */
+const SYMBOL_TO_CODE: Record<string, string> = {
+  '€': 'EUR', '$': 'USD', '£': 'GBP', '₪': 'ILS', '₺': 'TRY', '₹': 'INR', '¥': 'JPY', 'CA$': 'CAD', 'A$': 'AUD', 'zł': 'PLN',
+};
+
+/** ISO code of the shop currency (e.g. "EUR"), or null if unknown */
+export function currencyCode(cur: string = getSettings().currency): string | null {
+  const code = SYMBOL_TO_CODE[cur] ?? cur;
+  return /^[A-Z]{3}$/.test(code) ? code : null;
+}
+
+const priceFormats = new Map<string, Intl.NumberFormat>();
+function priceFormat(code: string, fraction: number): Intl.NumberFormat {
+  const key = `${getLocale()}|${code}|${fraction}`;
+  let f = priceFormats.get(key);
+  if (!f) {
+    f = new Intl.NumberFormat(getLocale(), {
+      style: 'currency',
+      currency: code,
+      minimumFractionDigits: fraction,
+      maximumFractionDigits: Math.max(fraction, 2),
+    });
+    priceFormats.set(key, f);
+  }
+  return f;
+}
+
+/** Price the way the active language writes it: "€25" (en), "25 €" (de/fr), "25,50 €" … */
 export function formatPrice(amount: number): string {
-  const cur = getSettings().currency || '$';
-  const num = amount.toLocaleString('en-US', {
-    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
-    maximumFractionDigits: 2,
-  });
-  return /^[A-Za-z]{2,}$/.test(cur) ? `${cur} ${num}` : `${cur}${num}`;
+  const cur = getSettings().currency || 'EUR';
+  const code = currencyCode(cur);
+  if (code) {
+    try {
+      return priceFormat(code, Number.isInteger(amount) ? 0 : 2).format(amount);
+    } catch {
+      /* unknown code — fall through */
+    }
+  }
+  return `${cur}${amount}`;
+}
+
+/** Just the currency sign in the active language, e.g. "€" */
+export function currencySymbol(): string {
+  const code = currencyCode();
+  if (!code) return getSettings().currency;
+  try {
+    return priceFormat(code, 0).formatToParts(0).find((x) => x.type === 'currency')?.value ?? code;
+  } catch {
+    return code;
+  }
 }
 
 // ============================================================
@@ -427,7 +530,7 @@ export async function addUser(fullName: string, mobile: string): Promise<User> {
   cache.users = [...cache.users, { ...newUser, created_at: new Date().toISOString() }];
   saveSession({ user: newUser });
   emitChange();
-  logActivity('client_signup', `${fullName} joined as a new client`);
+  logActivity('client_signup', { name: fullName });
   return newUser;
 }
 
@@ -457,7 +560,7 @@ async function preparePhoto(file: File): Promise<Blob> {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const i = new Image();
       i.onload = () => resolve(i);
-      i.onerror = () => reject(new Error('That file is not a supported image'));
+      i.onerror = () => reject(new Error('BAD_IMAGE'));
       i.src = url;
     });
     const ratio = 4 / 5;
@@ -478,11 +581,11 @@ async function preparePhoto(file: File): Promise<Blob> {
     canvas.width = outW;
     canvas.height = outH;
     const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Could not process the image');
+    if (!ctx) throw new Error('BAD_IMAGE');
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
     return await new Promise<Blob>((resolve, reject) =>
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not process the image'))), 'image/jpeg', 0.86)
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('BAD_IMAGE'))), 'image/jpeg', 0.86)
     );
   } finally {
     URL.revokeObjectURL(url);
@@ -526,7 +629,7 @@ export type PhotoChange = { kind: 'keep' } | { kind: 'remove' } | { kind: 'uploa
 export async function addStylist(input: StylistInput, password: string, photo: PhotoChange): Promise<void> {
   // Never turn the admin (or another barber's login) into this barber
   const owner = await findUserByMobile(input.mobile_number);
-  if (owner && owner.role !== 'client') throw new Error('That number is already used by the admin or another barber');
+  if (owner && owner.role !== 'client') throw new Error('NUMBER_TAKEN');
   const id = newId('s');
   const sort = Math.max(0, ...cache.stylists.map((s) => s.sort)) + 1;
   await write(db().from('stylists').insert({ id, ...input, image: null, sort }));
@@ -548,7 +651,7 @@ export async function addStylist(input: StylistInput, password: string, photo: P
     await write(db().from('stylists').update({ image: url }).eq('id', id));
   }
   await refreshAll();
-  logActivity('barber_added', `${input.name} joined the team as ${input.title}`, { stylist_id: id });
+  logActivity('barber_added', { name: input.name, title: input.title }, { stylist_id: id });
 }
 
 /** Admin: edit a barber's profile, photo and (optionally) password */
@@ -559,10 +662,10 @@ export async function updateStylist(
   photo: PhotoChange
 ): Promise<void> {
   const before = getStylistById(id);
-  if (!before) throw new Error('Barber not found');
+  if (!before) throw new Error('NOT_FOUND');
   if (input.mobile_number !== before.mobile_number) {
     const owner = await findUserByMobile(input.mobile_number);
-    if (owner) throw new Error('That number already belongs to another account');
+    if (owner) throw new Error('NUMBER_TAKEN');
   }
 
   let image = before.image;
@@ -582,18 +685,16 @@ export async function updateStylist(
   }
   await refreshAll();
 
-  const changes: string[] = [];
-  if (photo.kind === 'upload') changes.push('new photo');
-  if (photo.kind === 'remove') changes.push('photo removed');
-  if (before.name !== input.name) changes.push(`name → ${input.name}`);
-  if (before.title !== input.title) changes.push(`title → ${input.title}`);
-  if (before.bio !== input.bio) changes.push('bio');
-  if (before.mobile_number !== input.mobile_number) changes.push('login number');
-  if (before.active !== input.active) changes.push(input.active ? 'now taking bookings' : 'bookings paused');
-  if (password) changes.push('password reset');
-  logActivity('barber_updated', `${input.name}'s profile updated${changes.length ? `: ${changes.join(', ')}` : ''}`, {
-    stylist_id: id,
-  });
+  const changes: ActivityChange[] = [];
+  if (photo.kind === 'upload') changes.push({ c: 'photoNew' });
+  if (photo.kind === 'remove') changes.push({ c: 'photoRemoved' });
+  if (before.name !== input.name) changes.push({ c: 'name', to: input.name });
+  if (before.title !== input.title) changes.push({ c: 'title', to: input.title });
+  if (before.bio !== input.bio) changes.push({ c: 'bio' });
+  if (before.mobile_number !== input.mobile_number) changes.push({ c: 'login' });
+  if (before.active !== input.active) changes.push({ c: input.active ? 'activeOn' : 'activeOff' });
+  if (password) changes.push({ c: 'password' });
+  logActivity('barber_updated', { name: input.name, changes }, { stylist_id: id });
 }
 
 /** Admin: remove a barber. Their login becomes a normal client account. */
@@ -604,7 +705,7 @@ export async function removeStylist(id: string): Promise<void> {
   await write(db().from('users').update({ role: 'client' }).eq('mobile_number', stylist.mobile_number));
   removePhotoFile(stylist.image);
   await refreshAll();
-  logActivity('barber_removed', `${stylist.name} was removed from the team`, { stylist_id: id });
+  logActivity('barber_removed', { name: stylist.name }, { stylist_id: id });
 }
 
 // ============================================================
@@ -630,16 +731,16 @@ export async function saveService(service: Omit<Service, 'id'> & { id?: string }
   await write(db().from('services').upsert(row));
 
   if (!before) {
-    logActivity('service_added', `New service “${row.name}” added · ${formatPrice(row.price)} · ${row.duration_min} min`);
+    logActivity('service_added', { name: row.name, price: row.price, minutes: row.duration_min });
     return;
   }
-  const changes: string[] = [];
-  if (before.name !== row.name) changes.push(`renamed to “${row.name}”`);
-  if (before.price !== row.price) changes.push(`price ${formatPrice(before.price)} → ${formatPrice(row.price)}`);
-  if (before.duration_min !== row.duration_min) changes.push(`time ${before.duration_min} → ${row.duration_min} min`);
-  if (before.description !== row.description) changes.push('description');
-  if (before.active !== row.active) changes.push(row.active ? 'now visible' : 'hidden from clients');
-  if (changes.length) logActivity('service_updated', `“${before.name}” updated: ${changes.join(', ')}`);
+  const changes: ActivityChange[] = [];
+  if (before.name !== row.name) changes.push({ c: 'rename', to: row.name });
+  if (before.price !== row.price) changes.push({ c: 'price', from: before.price, to: row.price });
+  if (before.duration_min !== row.duration_min) changes.push({ c: 'time', from: before.duration_min, to: row.duration_min });
+  if (before.description !== row.description) changes.push({ c: 'description' });
+  if (before.active !== row.active) changes.push({ c: row.active ? 'visible' : 'hidden' });
+  if (changes.length) logActivity('service_updated', { name: before.name, changes });
 }
 
 export async function deleteService(id: string): Promise<void> {
@@ -647,7 +748,7 @@ export async function deleteService(id: string): Promise<void> {
   cache.services = cache.services.filter((s) => s.id !== id);
   emitChange();
   await write(db().from('services').delete().eq('id', id));
-  if (before) logActivity('service_deleted', `Service “${before.name}” deleted`);
+  if (before) logActivity('service_deleted', { name: before.name });
 }
 
 /** Move a service up (-1) or down (+1) in the menu */
@@ -696,11 +797,15 @@ export function willAutoConfirm(date: string, time: string): boolean {
   return new Date(`${date}T${time}:00`).getTime() - Date.now() <= WALK_IN_AUTO_CONFIRM_MIN * 60000;
 }
 
-/** "James Carter's Skin Fade with Leo Vargas · Tue, Oct 6 at 10:00" (barber omitted when they're the one acting) */
-function describe(a: Appointment, withBarber = true): string {
-  const client = getUserById(a.user_id)?.full_name ?? 'A client';
-  const barber = getStylistById(a.stylist_id)?.name ?? 'a barber';
-  return `${client}'s ${a.service_name}${withBarber ? ` with ${barber}` : ''} · ${formatShortDate(a.date)} at ${a.time}`;
+/** Booking details for the activity log (barber omitted when they're the one acting) */
+function describe(a: Appointment, withBarber = true): ActivityParams {
+  return {
+    client: getUserById(a.user_id)?.full_name ?? '—',
+    service: a.service_name,
+    barber: withBarber ? getStylistById(a.stylist_id)?.name ?? '—' : undefined,
+    date: a.date,
+    time: a.time,
+  };
 }
 
 /**
@@ -716,7 +821,7 @@ export async function addAppointment(
   note: string
 ): Promise<Appointment> {
   const service = getServiceById(serviceId);
-  if (!service) throw new Error('Service not found');
+  if (!service) throw new Error('NOT_FOUND');
 
   await Promise.all([fetchTable('appointments'), fetchTable('blocked_slots')]);
   if (hasReachedBookingLimit(userId)) {
@@ -758,13 +863,9 @@ export async function addAppointment(
   cache.appointments = [...cache.appointments, { ...appt, created_at: new Date().toISOString() }];
   emitChange();
 
-  const client = getUserById(userId)?.full_name ?? currentUser()?.full_name ?? 'A client';
-  const barber = getStylistById(stylistId)?.name ?? 'a barber';
   logActivity(
     'booking_created',
-    `${client} booked ${service.name} with ${barber} · ${formatShortDate(date)} at ${time}${
-      appt.status === 'booked' ? ' (auto-confirmed)' : ''
-    }`,
+    { ...describe(appt), client: getUserById(userId)?.full_name ?? currentUser()?.full_name ?? '—', auto: appt.status === 'booked' },
     { stylist_id: stylistId, appointment_id: appt.id, amount: service.price }
   );
   return appt;
@@ -783,19 +884,14 @@ export async function updateAppointmentStatus(id: string, status: AppointmentSta
   emitChange();
   await write(db().from('appointments').update(patch).eq('id', id));
 
-  const who = currentUser()?.full_name ?? 'Someone';
-  const what = describe(before, role !== 'stylist');
+  const what = { ...describe(before, role !== 'stylist'), who: currentUser()?.full_name ?? '—' };
   const extra = { stylist_id: before.stylist_id, appointment_id: id };
-  if (status === 'booked') logActivity('booking_confirmed', `${who} confirmed ${what}`, extra);
+  if (status === 'booked') logActivity('booking_confirmed', what, extra);
   else if (status === 'completed')
-    logActivity('booking_completed', `${who} completed ${what} · ${formatPrice(before.price)}`, { ...extra, amount: before.price });
-  else if (status === 'no_show') logActivity('booking_no_show', `No-show: ${what}`, { ...extra, amount: before.price });
+    logActivity('booking_completed', { ...what, price: before.price }, { ...extra, amount: before.price });
+  else if (status === 'no_show') logActivity('booking_no_show', what, { ...extra, amount: before.price });
   else if (status === 'cancelled')
-    logActivity(
-      before.status === 'pending' && by !== 'client' ? 'booking_declined' : 'booking_cancelled',
-      `${who} ${before.status === 'pending' && by !== 'client' ? 'declined' : 'cancelled'} ${what}`,
-      extra
-    );
+    logActivity(before.status === 'pending' && by !== 'client' ? 'booking_declined' : 'booking_cancelled', what, extra);
 }
 
 /** The client's upcoming (pending/confirmed) bookings, soonest first */
@@ -846,7 +942,7 @@ export async function autoCompletePastBookings(): Promise<number> {
         db().from('appointments').update({ status: 'cancelled', cancelled_by: 'system', updated_at: stamp }).in('id', ids).eq('status', 'pending')
       );
       for (const a of expired) {
-        logActivity('booking_expired', `Not confirmed in time: ${describe(a)}`, {
+        logActivity('booking_expired', describe(a), {
           stylist_id: a.stylist_id,
           appointment_id: a.id,
           system: true,
@@ -862,7 +958,7 @@ export async function autoCompletePastBookings(): Promise<number> {
     emitChange();
     await write(db().from('appointments').update({ status: 'completed', updated_at: stamp }).in('id', ids).eq('status', 'booked'));
     for (const a of due) {
-      logActivity('booking_completed', `Completed automatically after it ended: ${describe(a)} · ${formatPrice(a.price)}`, {
+      logActivity('booking_auto_completed', { ...describe(a), price: a.price }, {
         stylist_id: a.stylist_id,
         appointment_id: a.id,
         amount: a.price,
@@ -952,7 +1048,12 @@ export async function removeBlocks(ids: string[]): Promise<void> {
   const name = getStylistById(first.stylist_id)?.name ?? 'A barber';
   logActivity(
     'time_unblocked',
-    `${name} reopened ${fromMin(Math.min(...ranges.map((r) => r.start)))}–${fromMin(Math.max(...ranges.map((r) => r.end)))} on ${formatShortDate(first.date)}`,
+    {
+      name,
+      from: fromMin(Math.min(...ranges.map((r) => r.start))),
+      to: fromMin(Math.max(...ranges.map((r) => r.end))),
+      date: first.date,
+    },
     { stylist_id: first.stylist_id }
   );
 }
@@ -967,7 +1068,7 @@ export async function addBlock(stylistId: string, date: string, start: string, e
   emitChange();
   await write(db().from('blocked_slots').insert(row));
   const name = getStylistById(stylistId)?.name ?? 'A barber';
-  logActivity('time_blocked', `${name} blocked ${start}–${end} on ${formatShortDate(date)}${row.note ? ` (${row.note})` : ''}`, {
+  logActivity('time_blocked', { name, from: start, to: end, date, note: row.note }, {
     stylist_id: stylistId,
   });
 }
@@ -980,7 +1081,7 @@ export async function removeBlock(id: string): Promise<void> {
   if (b?.time) {
     const r = blockRange(b);
     const name = getStylistById(b.stylist_id)?.name ?? 'A barber';
-    logActivity('time_unblocked', `${name} reopened ${fromMin(r.start)}–${fromMin(r.end)} on ${formatShortDate(b.date)}`, {
+    logActivity('time_unblocked', { name, from: fromMin(r.start), to: fromMin(r.end), date: b.date }, {
       stylist_id: b.stylist_id,
     });
   }
@@ -994,14 +1095,14 @@ export async function setDayOff(stylistId: string, date: string, off: boolean): 
     cache.blocked_slots = [...cache.blocked_slots, row];
     emitChange();
     await write(db().from('blocked_slots').insert(row));
-    logActivity('day_off', `${name} took ${formatShortDate(date)} off`, { stylist_id: stylistId });
+    logActivity('day_off', { name, date }, { stylist_id: stylistId });
   } else {
     cache.blocked_slots = cache.blocked_slots.filter(
       (b) => !(b.stylist_id === stylistId && b.date === date && b.time === null)
     );
     emitChange();
     await write(db().from('blocked_slots').delete().eq('stylist_id', stylistId).eq('date', date).is('time', null));
-    logActivity('day_on', `${name} is working again on ${formatShortDate(date)}`, { stylist_id: stylistId });
+    logActivity('day_on', { name, date }, { stylist_id: stylistId });
   }
 }
 

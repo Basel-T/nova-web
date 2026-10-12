@@ -53,13 +53,14 @@ import {
   Sheet,
   StatusPill,
   Toggle,
+  LanguageSwitcher,
   confirmDialog,
   cx,
   inputCls,
   toast,
 } from '../../ui';
 import {
-  WEEKDAYS,
+  weekdayName,
   addDays,
   endTime,
   formatDuration,
@@ -73,6 +74,7 @@ import {
   weekdayOf,
 } from '../../lib/time';
 import Analytics from '../Analytics';
+import { t } from '../../i18n';
 
 type Tab = 'agenda' | 'requests' | 'timeoff' | 'stats';
 
@@ -84,7 +86,7 @@ export default function BarberPanel({ user, onLogout }: { user: User; onLogout: 
   const stylist = getStylistByMobile(user.mobile_number);
 
   const signOut = async () => {
-    if (await confirmDialog({ title: 'Sign out?', confirmText: 'Sign out', cancelText: 'Stay' })) onLogout();
+    if (await confirmDialog({ title: t('common.signOutQ'), confirmText: t('common.signOut'), cancelText: t('common.stay') })) onLogout();
   };
 
   if (!stylist) {
@@ -92,9 +94,9 @@ export default function BarberPanel({ user, onLogout }: { user: User; onLogout: 
       <div className="page-glow grid min-h-dvh place-items-center p-6">
         <EmptyState
           icon={UserX}
-          title="Barber profile not found"
-          text="Ask the shop admin to add you to the team."
-          action={<Button onClick={onLogout}>Sign out</Button>}
+          title={t('barber.notFound')}
+          text={t('barber.notFoundText')}
+          action={<Button onClick={onLogout}>{t('common.signOut')}</Button>}
         />
       </div>
     );
@@ -111,15 +113,18 @@ export default function BarberPanel({ user, onLogout }: { user: User; onLogout: 
           <div className="flex items-center gap-3">
             <Avatar name={stylist.name} src={stylist.image} size={40} />
             <div className="min-w-0">
-              <p className="truncate font-display text-[22px] leading-none text-cream">Hi, {stylist.name.split(' ')[0]}</p>
+              <p className="truncate font-display text-[22px] leading-none text-cream">{t('barber.hi', { name: stylist.name.split(' ')[0] })}</p>
               <p className="mt-1 truncate text-xs text-ink-400">{stylist.title}</p>
             </div>
           </div>
         }
         right={
-          <IconButton label="Sign out" onClick={signOut}>
-            <LogOut className="size-5" />
-          </IconButton>
+          <div className="flex items-center gap-1">
+            <LanguageSwitcher />
+            <IconButton label={t('common.signOut')} onClick={signOut}>
+              <LogOut className="size-5 rtl:-scale-x-100" />
+            </IconButton>
+          </div>
         }
       />
 
@@ -129,7 +134,7 @@ export default function BarberPanel({ user, onLogout }: { user: User; onLogout: 
         {tab === 'timeoff' && <TimeOff stylist={stylist} />}
         {tab === 'stats' && (
           <div className="animate-rise">
-            <h1 className="mb-5 font-display text-[40px] leading-none text-cream">Your stats</h1>
+            <h1 className="mb-5 font-display text-[40px] leading-none text-cream">{t('barber.yourStats')}</h1>
             <Analytics stylistId={stylist.id} />
           </div>
         )}
@@ -142,10 +147,10 @@ export default function BarberPanel({ user, onLogout }: { user: User; onLogout: 
           window.scrollTo(0, 0);
         }}
         items={[
-          { key: 'agenda', label: 'Agenda', icon: CalendarDays },
-          { key: 'requests', label: 'Requests', icon: Inbox, badge: requests.length },
-          { key: 'timeoff', label: 'Time off', icon: CalendarOff },
-          { key: 'stats', label: 'Stats', icon: BarChart3 },
+          { key: 'agenda', label: t('barber.tabAgenda'), icon: CalendarDays },
+          { key: 'requests', label: t('barber.tabRequests'), icon: Inbox, badge: requests.length },
+          { key: 'timeoff', label: t('barber.tabTimeOff'), icon: CalendarOff },
+          { key: 'stats', label: t('barber.tabStats'), icon: BarChart3 },
         ]}
       />
     </div>
@@ -164,7 +169,7 @@ function Agenda({ stylist, pendingCount, onRequests }: { stylist: Stylist; pendi
   const strip = [];
   for (let d = addDays(today, -7); d <= addDays(today, horizon); d = addDays(d, 1)) {
     const has = getAppointmentsForStylist(stylist.id, d).some((a) => a.status === 'pending' || a.status === 'booked');
-    strip.push({ date: d, marked: has, note: isDayOff(stylist.id, d) ? 'Off' : !getHoursFor(d) ? 'Closed' : undefined });
+    strip.push({ date: d, marked: has, note: isDayOff(stylist.id, d) ? t('strip.off') : !getHoursFor(d) ? t('strip.closed') : undefined });
   }
 
   const appts = getAppointmentsForStylist(stylist.id, date).sort(byTime);
@@ -193,13 +198,13 @@ function Agenda({ stylist, pendingCount, onRequests }: { stylist: Stylist; pendi
               onClick={() => setDate(today)}
               className="rounded-full border border-gold-400/40 bg-gold-400/10 px-3 py-1 text-xs font-medium text-gold-200 transition hover:bg-gold-400/15"
             >
-              Today
+              {t('time.today')}
             </button>
           )}
         </div>
         <h1 className="font-display text-[40px] leading-none text-cream">{formatLongDate(date)}</h1>
         <p className="tnum mt-2 text-xs text-ink-400">
-          {dayOff ? 'Day off' : hours ? `Shop open ${hours.open} – ${hours.close}` : 'Shop closed'}
+          {dayOff ? t('barber.dayOff') : hours ? t('barber.shopOpen', { from: hours.open, to: hours.close }) : t('barber.shopClosed')}
         </p>
       </div>
 
@@ -208,29 +213,29 @@ function Agenda({ stylist, pendingCount, onRequests }: { stylist: Stylist; pendi
       {pendingCount > 0 && (
         <button
           onClick={onRequests}
-          className="flex w-full items-center gap-3 rounded-2xl border border-amber-300/20 bg-amber-400/[0.07] px-4 py-3 text-left transition hover:bg-amber-400/10"
+          className="flex w-full items-center gap-3 rounded-2xl border border-amber-300/20 bg-amber-400/[0.07] px-4 py-3 text-start transition hover:bg-amber-400/10"
         >
           <Inbox className="size-5 text-amber-300" />
           <span className="flex-1 text-sm text-amber-100">
-            {pendingCount} booking request{pendingCount > 1 ? 's' : ''} waiting for you
+            {t('barber.requestsWaiting', { n: pendingCount })}
           </span>
-          <span className="text-xs font-medium text-amber-200">Review</span>
+          <span className="text-xs font-medium text-amber-200">{t('barber.review')}</span>
         </button>
       )}
 
       <div className="grid grid-cols-3 gap-2.5">
-        <MiniStat label="Bookings" value={String(live.length)} />
-        <MiniStat label="Earned" value={formatPrice(earned)} />
-        <MiniStat label="Expected" value={formatPrice(expected)} />
+        <MiniStat label={t('barber.statBookings')} value={String(live.length)} />
+        <MiniStat label={t('barber.statEarned')} value={formatPrice(earned)} />
+        <MiniStat label={t('barber.statExpected')} value={formatPrice(expected)} />
       </div>
 
       {dayOff ? (
         <Card>
-          <EmptyState icon={CalendarOff} title="You're off this day" text="Turn this off in Time off if plans change." />
+          <EmptyState icon={CalendarOff} title={t('barber.offThisDay')} text={t('barber.offThisDayText')} />
         </Card>
       ) : items.length === 0 ? (
         <Card>
-          <EmptyState icon={Coffee} title="Nothing booked yet" text={hours ? 'New bookings appear here instantly.' : 'The shop is closed this day.'} />
+          <EmptyState icon={Coffee} title={t('barber.nothingBooked')} text={hours ? t('barber.nothingBookedText') : t('booking.shopClosed')} />
         </Card>
       ) : (
         <div className="space-y-2.5">
@@ -239,10 +244,10 @@ function Agenda({ stylist, pendingCount, onRequests }: { stylist: Stylist; pendi
               <AppointmentCard key={it.appt.id} appt={it.appt} />
             ) : (
               <div key={it.id} className="flex items-center gap-4 rounded-3xl border border-dashed border-white/[0.09] px-4 py-3.5">
-                <div className="tnum w-12 shrink-0 text-right text-sm text-ink-400">{fromMin(it.at)}</div>
+                <div className="tnum w-12 shrink-0 text-end text-sm text-ink-400">{fromMin(it.at)}</div>
                 <Coffee className="size-4 text-ink-400" />
                 <p className="flex-1 text-sm text-ink-300">
-                  {it.note || 'Blocked'} · <span className="tnum">{fromMin(it.at)} – {fromMin(it.end)}</span>
+                  {it.note || t('barber.blocked')} · <span className="tnum">{fromMin(it.at)} – {fromMin(it.end)}</span>
                 </p>
               </div>
             )
@@ -252,7 +257,7 @@ function Agenda({ stylist, pendingCount, onRequests }: { stylist: Stylist; pendi
 
       {cancelled.length > 0 && (
         <p className="text-center text-xs text-ink-500">
-          {cancelled.length} cancelled booking{cancelled.length > 1 ? 's' : ''} hidden
+          {t('barber.cancelledHidden', { n: cancelled.length })}
         </p>
       )}
     </div>
@@ -274,14 +279,14 @@ export function AppointmentCard({ appt, showDate = false }: { appt: Appointment;
   return (
     <Card className="p-4">
       <div className="flex gap-4">
-        <div className="w-12 shrink-0 text-right">
+        <div className="w-12 shrink-0 text-end">
           <p className="tnum text-[15px] font-semibold text-cream">{appt.time}</p>
           <p className="tnum text-xs text-ink-500">{endTime(appt.time, appt.duration_min)}</p>
         </div>
         <div className="w-px shrink-0 bg-gradient-to-b from-gold-400/60 to-transparent" />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <p className="truncate font-medium text-cream">{client?.full_name ?? 'Client'}</p>
+            <p className="truncate font-medium text-cream">{client?.full_name ?? t('barber.client')}</p>
             <StatusPill status={appt.status} />
           </div>
           <p className="mt-0.5 text-sm text-ink-400">
@@ -299,7 +304,7 @@ export function AppointmentCard({ appt, showDate = false }: { appt: Appointment;
                 href={`tel:${client.mobile_number}`}
                 className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-white/[0.08] px-3 text-[13px] text-ink-200 hover:bg-white/[0.04]"
               >
-                <Phone className="size-3.5" /> Call
+                <Phone className="size-3.5" /> {t('common.call')}
               </a>
             )}
             <AppointmentActions appt={appt} />
@@ -313,16 +318,16 @@ export function AppointmentCard({ appt, showDate = false }: { appt: Appointment;
 /** Confirm / decline / complete / no-show / cancel — shared with the admin */
 export function AppointmentActions({ appt }: { appt: Appointment }) {
   const [busy, setBusy] = useState<string | null>(null);
-  const client = getUserById(appt.user_id)?.full_name ?? 'the client';
+  const client = getUserById(appt.user_id)?.full_name ?? t('barber.theClient');
 
   const run = async (status: Appointment['status'], label: string, ask?: { title: string; message: string; confirmText: string }) => {
-    if (ask && !(await confirmDialog({ ...ask, destructive: true, cancelText: 'Back' }))) return;
+    if (ask && !(await confirmDialog({ ...ask, destructive: true, cancelText: t('common.back') }))) return;
     setBusy(status);
     try {
       await updateAppointmentStatus(appt.id, status);
       toast(label);
     } catch {
-      toast('Could not save — check your connection', 'error');
+      toast(t('barber.saveFailed'), 'error');
     } finally {
       setBusy(null);
     }
@@ -336,17 +341,17 @@ export function AppointmentActions({ appt }: { appt: Appointment }) {
           variant="outline"
           loading={busy === 'cancelled'}
           onClick={() =>
-            run('cancelled', 'Request declined', {
-              title: 'Decline this request?',
-              message: `${client} will see that the booking was declined.`,
-              confirmText: 'Decline',
+            run('cancelled', t('barber.declined'), {
+              title: t('barber.declineTitle'),
+              message: t('barber.declineText', { client }),
+              confirmText: t('barber.decline'),
             })
           }
         >
-          Decline
+          {t('barber.decline')}
         </Button>
-        <Button size="sm" variant="gold" loading={busy === 'booked'} onClick={() => run('booked', 'Booking confirmed')}>
-          Confirm
+        <Button size="sm" variant="gold" loading={busy === 'booked'} onClick={() => run('booked', t('barber.confirmedToast'))}>
+          {t('common.confirm')}
         </Button>
       </>
     );
@@ -363,14 +368,14 @@ export function AppointmentActions({ appt }: { appt: Appointment }) {
         variant="subtle"
         loading={busy === 'no_show'}
         onClick={() =>
-          run('no_show', 'Changed to no-show', {
-            title: 'Change to no-show?',
-            message: `${client} didn't turn up. The ${formatPrice(appt.price)} will no longer count as revenue.`,
-            confirmText: 'No-show',
+          run('no_show', t('barber.changedNoShow'), {
+            title: t('barber.changeNoShowTitle'),
+            message: t('barber.changeNoShowText', { client, price: formatPrice(appt.price) }),
+            confirmText: t('status.no_show'),
           })
         }
       >
-        Mark no-show
+        {t('barber.markNoShow')}
       </Button>
     );
   }
@@ -385,14 +390,14 @@ export function AppointmentActions({ appt }: { appt: Appointment }) {
             className="text-rose-300 hover:text-rose-200"
             loading={busy === 'cancelled'}
             onClick={() =>
-              run('cancelled', 'Booking cancelled', {
-                title: 'Cancel this booking?',
-                message: `${client}'s ${appt.service_name} on ${formatLongDate(appt.date)} at ${appt.time} will be cancelled.`,
-                confirmText: 'Cancel booking',
+              run('cancelled', t('barber.cancelledToast'), {
+                title: t('barber.cancelTitle'),
+                message: t('barber.cancelText', { client, service: appt.service_name, date: formatLongDate(appt.date), time: appt.time }),
+                confirmText: t('barber.cancelBooking'),
               })
             }
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
         )}
         {started && (
@@ -402,17 +407,17 @@ export function AppointmentActions({ appt }: { appt: Appointment }) {
               variant="subtle"
               loading={busy === 'no_show'}
               onClick={() =>
-                run('no_show', 'Marked as no-show', {
-                  title: 'Mark as no-show?',
-                  message: `${client} didn't turn up for this appointment.`,
-                  confirmText: 'No-show',
+                run('no_show', t('barber.markedNoShow'), {
+                  title: t('barber.markNoShowTitle'),
+                  message: t('barber.markNoShowText', { client }),
+                  confirmText: t('status.no_show'),
                 })
               }
             >
-              No-show
+              {t('status.no_show')}
             </Button>
-            <Button size="sm" variant="gold" loading={busy === 'completed'} onClick={() => run('completed', 'Marked as completed')}>
-              Complete
+            <Button size="sm" variant="gold" loading={busy === 'completed'} onClick={() => run('completed', t('barber.markedCompleted'))}>
+              {t('barber.complete')}
             </Button>
           </>
         )}
@@ -430,12 +435,12 @@ function Requests({ requests }: { requests: Appointment[] }) {
   return (
     <div className="animate-rise space-y-5">
       <div>
-        <h1 className="font-display text-[40px] leading-none text-cream">Requests</h1>
-        <p className="mt-2 text-sm text-ink-400">New bookings waiting for your confirmation.</p>
+        <h1 className="font-display text-[40px] leading-none text-cream">{t('barber.tabRequests')}</h1>
+        <p className="mt-2 text-sm text-ink-400">{t('barber.requestsText')}</p>
       </div>
       {requests.length === 0 ? (
         <Card>
-          <EmptyState icon={Inbox} title="You're all caught up" text="New requests show up here the moment a client books." />
+          <EmptyState icon={Inbox} title={t('barber.caughtUp')} text={t('barber.caughtUpText')} />
         </Card>
       ) : (
         <div className="space-y-2.5">
@@ -461,7 +466,7 @@ function TimeOff({ stylist }: { stylist: Stylist }) {
   for (let d = today; d <= addDays(today, 60); d = addDays(d, 1)) {
     strip.push({
       date: d,
-      note: isDayOff(stylist.id, d) ? 'Off' : !getHoursFor(d) ? 'Closed' : undefined,
+      note: isDayOff(stylist.id, d) ? t('strip.off') : !getHoursFor(d) ? t('strip.closed') : undefined,
       marked: getBlocks(stylist.id, d).length > 0,
     });
   }
@@ -474,33 +479,33 @@ function TimeOff({ stylist }: { stylist: Stylist }) {
   const toggleDay = async (v: boolean) => {
     if (v && bookedThatDay.length > 0) {
       const ok = await confirmDialog({
-        title: 'You have bookings that day',
-        message: `${bookedThatDay.length} booking${bookedThatDay.length > 1 ? 's stay' : ' stays'} in place — cancel ${bookedThatDay.length > 1 ? 'them' : 'it'} from your agenda if needed. New bookings will be blocked.`,
-        confirmText: 'Take the day off',
-        cancelText: 'Back',
+        title: t('barber.bookingsThatDay'),
+        message: t('barber.bookingsThatDayText', { n: bookedThatDay.length }),
+        confirmText: t('barber.takeDayOff'),
+        cancelText: t('common.back'),
       });
       if (!ok) return;
     }
     try {
       await setDayOff(stylist.id, date, v);
-      toast(v ? 'Day off saved' : 'You are working this day again');
+      toast(v ? t('barber.dayOffSaved') : t('barber.workingAgain'));
     } catch {
-      toast('Could not save — check your connection', 'error');
+      toast(t('barber.saveFailed'), 'error');
     }
   };
 
   return (
     <div className="animate-rise space-y-5">
       <div>
-        <h1 className="font-display text-[40px] leading-none text-cream">Time off</h1>
-        <p className="mt-2 text-sm text-ink-400">Block breaks or whole days so clients can't book them.</p>
+        <h1 className="font-display text-[40px] leading-none text-cream">{t('barber.tabTimeOff')}</h1>
+        <p className="mt-2 text-sm text-ink-400">{t('barber.timeOffText')}</p>
       </div>
 
       <DateStrip items={strip} value={date} onChange={setDate} />
 
       {!hours ? (
         <Card>
-          <EmptyState icon={CalendarOff} title={`The shop is closed on ${WEEKDAYS[weekdayOf(date)]}s`} />
+          <EmptyState icon={CalendarOff} title={t('barber.shopClosedOn', { day: weekdayName(weekdayOf(date)) })} />
         </Card>
       ) : (
         <>
@@ -508,21 +513,21 @@ function TimeOff({ stylist }: { stylist: Stylist }) {
             <Toggle
               checked={off}
               onChange={toggleDay}
-              label={`Day off · ${relativeDay(date)}`}
-              description="Clients can't book you on this day."
+              label={`${t('barber.dayOff')} · ${relativeDay(date)}`}
+              description={t('barber.dayOffText')}
             />
           </Card>
 
           {!off && (
             <Card className="p-5">
               <div className="mb-3 flex items-center justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-400">Breaks & blocked time</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-400">{t('barber.breaks')}</p>
                 <span className="tnum text-xs text-ink-500">
-                  Open {hours.open} – {hours.close}
+                  {t('barber.open', { from: hours.open, to: hours.close })}
                 </span>
               </div>
               {blocks.length === 0 ? (
-                <p className="py-3 text-sm text-ink-500">No blocked time on this day.</p>
+                <p className="py-3 text-sm text-ink-500">{t('barber.noBlocks')}</p>
               ) : (
                 <ul className="divide-y divide-white/[0.05]">
                   {blocks.map((b) => {
@@ -532,15 +537,15 @@ function TimeOff({ stylist }: { stylist: Stylist }) {
                         <span className="tnum text-cream">
                           {fromMin(b.start)} – {fromMin(b.end)}
                         </span>
-                        <span className="flex-1 truncate text-sm text-ink-400">{b.note || 'Blocked'}</span>
+                        <span className="flex-1 truncate text-sm text-ink-400">{b.note || t('barber.blocked')}</span>
                         <IconButton
-                          label="Remove"
+                          label={t('barber.remove')}
                           onClick={async () => {
                             try {
                               await removeBlocks(b.ids);
-                              toast('Time reopened');
+                              toast(t('barber.reopened'));
                             } catch {
-                              toast('Could not save', 'error');
+                              toast(t('barber.saveFailed'), 'error');
                             }
                           }}
                         >
@@ -552,7 +557,7 @@ function TimeOff({ stylist }: { stylist: Stylist }) {
                 </ul>
               )}
               <Button variant="subtle" className="mt-3 w-full" icon={<Plus className="size-4" />} onClick={() => setAdding(true)}>
-                Block time
+                {t('barber.blockTime')}
               </Button>
             </Card>
           )}
@@ -586,11 +591,11 @@ function BlockSheet({ stylist, date, open, onClose }: { stylist: Stylist; date: 
     (a) => (a.status === 'pending' || a.status === 'booked') && s < toMin(a.time) + a.duration_min && e > toMin(a.time)
   );
   const error = !start
-    ? 'No time left to block today'
+    ? t('barber.noTimeLeft')
     : e <= s
-      ? 'End time must be after the start time'
+      ? t('barber.endAfterStart')
       : clash
-        ? 'You have a booking during that time'
+        ? t('barber.bookingDuring')
         : '';
 
   const save = async () => {
@@ -598,10 +603,10 @@ function BlockSheet({ stylist, date, open, onClose }: { stylist: Stylist; date: 
     setSaving(true);
     try {
       await addBlock(stylist.id, date, start, end, note);
-      toast(`Blocked ${start} – ${end}`);
+      toast(t('barber.blockedToast', { from: start, to: end }));
       onClose();
     } catch {
-      toast('Could not save — check your connection', 'error');
+      toast(t('barber.saveFailed'), 'error');
       setSaving(false);
     }
   };
@@ -610,17 +615,17 @@ function BlockSheet({ stylist, date, open, onClose }: { stylist: Stylist; date: 
     <Sheet
       open={open}
       onClose={onClose}
-      title="Block time"
+      title={t('barber.blockTime')}
       subtitle={formatLongDate(date)}
       footer={
         <Button variant="gold" size="lg" className="w-full" disabled={!!error} loading={saving} onClick={save}>
-          {start ? `Block ${start} – ${end}` : 'Block time'}
+          {start ? t('barber.blockRange', { from: start, to: end }) : t('barber.blockTime')}
         </Button>
       }
     >
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
-          <Field label="From">
+          <Field label={t('barber.from')}>
             <Select
               value={start}
               onChange={(ev) => {
@@ -634,7 +639,7 @@ function BlockSheet({ stylist, date, open, onClose }: { stylist: Stylist; date: 
               ))}
             </Select>
           </Field>
-          <Field label="To">
+          <Field label={t('barber.to')}>
             <Select value={end} onChange={(ev) => setEnd(ev.target.value)}>
               {endOptions.map((t) => (
                 <option key={t}>{t}</option>
@@ -643,9 +648,9 @@ function BlockSheet({ stylist, date, open, onClose }: { stylist: Stylist; date: 
           </Field>
         </div>
         <p className="tnum text-sm text-ink-400">{e > s ? formatDuration(e - s) : '—'}</p>
-        <Field label="Reason">
+        <Field label={t('barber.reason')}>
           <div className="mb-2 flex flex-wrap gap-2">
-            {['Lunch', 'Break', 'Personal', 'Training'].map((n) => (
+            {[t('barber.reasonLunch'), t('barber.reasonBreak'), t('barber.reasonPersonal'), t('barber.reasonTraining')].map((n) => (
               <button
                 key={n}
                 type="button"
@@ -659,7 +664,7 @@ function BlockSheet({ stylist, date, open, onClose }: { stylist: Stylist; date: 
               </button>
             ))}
           </div>
-          <input value={note} onChange={(ev) => setNote(ev.target.value)} placeholder="Reason (optional)" className={inputCls} />
+          <input value={note} onChange={(ev) => setNote(ev.target.value)} placeholder={t('barber.reasonOptional')} className={inputCls} />
         </Field>
         {error && <p className="text-sm text-rose-300">{error}</p>}
       </div>

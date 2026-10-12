@@ -5,14 +5,15 @@
 import { useState, type ReactNode } from 'react';
 import { CalendarClock, KeyRound, RotateCcw, Store } from 'lucide-react';
 import type { DayHours, Settings, User } from '../../types';
-import { adminSetPassword, getSettings, resetDemo, saveSettings, useStoreVersion } from '../../store';
-import { Button, Card, Field, Select, Toggle, confirmDialog, cx, inputCls, toast } from '../../ui';
+import { adminSetPassword, errorText, getSettings, resetDemo, saveSettings, useStoreVersion } from '../../store';
+import { Button, Card, Field, LanguageSwitcher, Select, Toggle, confirmDialog, cx, inputCls, toast } from '../../ui';
 import { DEMO_MODE } from '../../config';
-import { WEEKDAYS, formatDuration, timeOptions, toMin } from '../../lib/time';
+import { WEEK_ORDER, formatDuration, timeOptions, toMin, weekdayName } from '../../lib/time';
+import { t } from '../../i18n';
 
 const CURRENCIES = ['$', '€', '£', '₪', 'AED', 'SAR', 'QAR', 'KWD', 'JOD', 'EGP', 'TRY', '₹', 'CHF', 'CA$', 'A$', '¥'];
 const HOUR_OPTIONS = timeOptions('05:00', '24:00', 30);
-const ORDER = [1, 2, 3, 4, 5, 6, 0];
+const ORDER = WEEK_ORDER; // Monday first
 
 export default function AdminSettings({ user }: { user: User }) {
   useStoreVersion();
@@ -30,15 +31,15 @@ export default function AdminSettings({ user }: { user: User }) {
   });
 
   const save = async () => {
-    if (draft.shop_name.trim().length < 2) return toast('Shop name is too short', 'error');
-    if (badDay !== undefined) return toast(`${WEEKDAYS[badDay]}: closing time must be after opening`, 'error');
+    if (draft.shop_name.trim().length < 2) return toast(t('settings.errName'), 'error');
+    if (badDay !== undefined) return toast(t('settings.errHours', { day: weekdayName(badDay) }), 'error');
     setSaving(true);
     try {
       const { id: _id, ...patch } = draft;
       await saveSettings({ ...patch, shop_name: draft.shop_name.trim(), tagline: draft.tagline.trim(), address: draft.address.trim(), phone: draft.phone.trim() });
-      toast('Settings saved');
+      toast(t('settings.saved'));
     } catch (e) {
-      toast(`Could not save: ${(e as Error).message}`, 'error');
+      toast(t('errors.generic'), 'error');
     } finally {
       setSaving(false);
     }
@@ -49,21 +50,23 @@ export default function AdminSettings({ user }: { user: User }) {
   return (
     <div className="space-y-5">
       {/* Shop profile */}
-      <Section icon={Store} title="Shop profile">
-        <Field label="Shop name">
+      <LanguageSwitcher variant="row" />
+
+      <Section icon={Store} title={t('settings.profile')}>
+        <Field label={t('settings.shopName')}>
           <input value={draft.shop_name} onChange={(e) => set({ shop_name: e.target.value })} className={inputCls} />
         </Field>
-        <Field label="Tagline">
-          <input value={draft.tagline} onChange={(e) => set({ tagline: e.target.value })} placeholder="e.g. Barbershop · Est. 2026" className={inputCls} />
+        <Field label={t('settings.tagline')}>
+          <input value={draft.tagline} onChange={(e) => set({ tagline: e.target.value })} placeholder={t('settings.taglinePlaceholder')} className={inputCls} />
         </Field>
-        <Field label="Address">
+        <Field label={t('settings.address')}>
           <input value={draft.address} onChange={(e) => set({ address: e.target.value })} className={inputCls} />
         </Field>
         <div className="grid grid-cols-[1fr_120px] gap-3">
-          <Field label="Phone">
-            <input value={draft.phone} onChange={(e) => set({ phone: e.target.value })} type="tel" placeholder="Shown to clients" className={cx(inputCls, 'tnum')} />
+          <Field label={t('csv.phone')}>
+            <input value={draft.phone} onChange={(e) => set({ phone: e.target.value })} type="tel" dir="ltr" placeholder={t('settings.phonePlaceholder')} className={cx(inputCls, 'tnum text-start')} />
           </Field>
-          <Field label="Currency">
+          <Field label={t('settings.currency')}>
             <Select value={draft.currency} onChange={(e) => set({ currency: e.target.value })}>
               {currencies.map((c) => (
                 <option key={c}>{c}</option>
@@ -74,7 +77,7 @@ export default function AdminSettings({ user }: { user: User }) {
       </Section>
 
       {/* Opening hours */}
-      <Section icon={CalendarClock} title="Opening hours">
+      <Section icon={CalendarClock} title={t('settings.hours')}>
         <ul className="divide-y divide-white/[0.05]">
           {ORDER.map((day) => {
             const h = draft.hours[String(day)];
@@ -84,15 +87,15 @@ export default function AdminSettings({ user }: { user: User }) {
                   type="button"
                   role="switch"
                   aria-checked={!!h}
-                  aria-label={`${WEEKDAYS[day]} open`}
+                  aria-label={t('settings.dayOpen', { day: weekdayName(day) })}
                   onClick={() => setDay(day, h ? null : { open: '10:00', close: '20:00' })}
                   className={cx('relative h-6 w-10 shrink-0 rounded-full transition-colors', h ? 'bg-gold-500' : 'bg-ink-600')}
                 >
-                  <span className={cx('absolute top-1 size-4 rounded-full bg-white transition-all', h ? 'left-5' : 'left-1')} />
+                  <span className={cx('absolute top-1 size-4 rounded-full bg-white transition-all', h ? 'start-5' : 'start-1')} />
                 </button>
                 <span className={cx('w-10 shrink-0 text-sm sm:w-24', h ? 'text-cream' : 'text-ink-400')}>
-                  <span className="sm:hidden">{WEEKDAYS[day].slice(0, 3)}</span>
-                  <span className="hidden sm:inline">{WEEKDAYS[day]}</span>
+                  <span className="sm:hidden">{weekdayName(day, 'short')}</span>
+                  <span className="hidden sm:inline">{weekdayName(day)}</span>
                 </span>
                 {h ? (
                   <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
@@ -101,51 +104,51 @@ export default function AdminSettings({ user }: { user: User }) {
                     <TimeSelect value={h.close} onChange={(v) => setDay(day, { ...h, close: v })} />
                   </div>
                 ) : (
-                  <span className="flex-1 text-sm text-ink-500">Closed</span>
+                  <span className="flex-1 text-sm text-ink-500">{t('client.closed')}</span>
                 )}
               </li>
             );
           })}
         </ul>
-        {badDay !== undefined && <p className="text-sm text-rose-300">{WEEKDAYS[badDay]}: closing time must be after opening.</p>}
+        {badDay !== undefined && <p className="text-sm text-rose-300">{t('settings.errHours', { day: weekdayName(badDay) })}</p>}
       </Section>
 
       {/* Booking rules */}
-      <Section icon={CalendarClock} title="Booking rules">
+      <Section icon={CalendarClock} title={t('settings.rules')}>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Start times every" hint="How often booking times are offered.">
+          <Field label={t('settings.interval')} hint={t('settings.intervalHint')}>
             <Select value={draft.slot_interval} onChange={(e) => set({ slot_interval: Number(e.target.value) })}>
               {[5, 10, 15, 20, 30, 45, 60].map((m) => (
                 <option key={m} value={m}>
-                  {m} min
+                  {t('time.durMin', { n: m })}
                 </option>
               ))}
             </Select>
           </Field>
-          <Field label="Book ahead up to" hint="How far ahead clients can book.">
+          <Field label={t('settings.window')} hint={t('settings.windowHint')}>
             <Select value={draft.booking_window_days} onChange={(e) => set({ booking_window_days: Number(e.target.value) })}>
               {[7, 14, 21, 30, 45, 60, 90, 180, 365].map((d) => (
                 <option key={d} value={d}>
-                  {d} days
+                  {t('settings.days', { n: d })}
                 </option>
               ))}
             </Select>
           </Field>
         </div>
-        <Field label="Max upcoming bookings per client" hint="How many future appointments one client can hold at the same time.">
+        <Field label={t('settings.maxUpcoming')} hint={t('settings.maxUpcomingHint')}>
           <Select value={draft.max_upcoming} onChange={(e) => set({ max_upcoming: Number(e.target.value) })}>
             {[1, 2, 3].map((n) => (
               <option key={n} value={n}>
-                {n} booking{n === 1 ? '' : 's'}
+                {t('settings.bookingsN', { n })}
               </option>
             ))}
           </Select>
         </Field>
-        <Field label="Minimum notice" hint="Keep at None so walk-ins can book a slot that starts in a few minutes.">
+        <Field label={t('settings.notice')} hint={t('settings.noticeHint')}>
           <Select value={draft.min_notice_min} onChange={(e) => set({ min_notice_min: Number(e.target.value) })}>
             {[0, 15, 30, 60, 120, 240, 720, 1440].map((m) => (
               <option key={m} value={m}>
-                {m === 0 ? 'None — book any free time' : `${formatDuration(m)} before`}
+                {m === 0 ? t('settings.noticeNone') : t('settings.noticeBefore', { time: formatDuration(m) })}
               </option>
             ))}
           </Select>
@@ -154,8 +157,8 @@ export default function AdminSettings({ user }: { user: User }) {
           <Toggle
             checked={draft.auto_confirm}
             onChange={(v) => set({ auto_confirm: v })}
-            label="Confirm bookings automatically"
-            description="Off: barbers approve each request. On: bookings are confirmed instantly."
+            label={t('settings.autoConfirm')}
+            description={t('settings.autoConfirmText')}
           />
         </div>
       </Section>
@@ -166,13 +169,13 @@ export default function AdminSettings({ user }: { user: User }) {
 
       {/* Save bar */}
       <div className={cx('sticky z-20 transition-all duration-300', dirty ? 'opacity-100' : 'pointer-events-none translate-y-4 opacity-0')} style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom))' }}>
-        <div className="flex items-center gap-3 rounded-2xl border border-gold-400/25 bg-ink-850/95 p-3 pl-4 shadow-2xl backdrop-blur-xl">
-          <span className="flex-1 text-sm text-ink-200">You have unsaved changes</span>
+        <div className="flex items-center gap-3 rounded-2xl border border-gold-400/25 bg-ink-850/95 p-3 ps-4 shadow-2xl backdrop-blur-xl">
+          <span className="flex-1 text-sm text-ink-200">{t('settings.unsaved')}</span>
           <Button size="sm" variant="ghost" onClick={() => setDraft(saved)}>
-            Discard
+            {t('settings.discard')}
           </Button>
           <Button size="sm" variant="gold" loading={saving} onClick={save}>
-            Save
+            {t('common.save')}
           </Button>
         </div>
       </div>
@@ -198,7 +201,7 @@ function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) 
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      aria-label="Time"
+      aria-label={t('booking.time')}
       className={cx(inputCls, 'tnum h-10 w-0 min-w-[64px] flex-1 cursor-pointer appearance-none px-1 text-center text-sm')}
     >
       {options.map((t) => (
@@ -214,11 +217,11 @@ function ResetDemoCard({ onDone }: { onDone: () => void }) {
 
   const reset = async () => {
     const ok = await confirmDialog({
-      title: 'Reset the demo?',
+      title: t('settings.resetTitle'),
       message:
-        'Are you sure? This deletes ALL bookings, blocked times, the activity log and every client except the demo client, and restores the demo barbers, services, hours and settings. Staff passwords go back to 12345. This cannot be undone.',
-      confirmText: 'Yes, reset',
-      cancelText: 'Cancel',
+        t('settings.resetText'),
+      confirmText: t('settings.resetYes'),
+      cancelText: t('common.cancel'),
       destructive: true,
     });
     if (!ok) return;
@@ -226,9 +229,9 @@ function ResetDemoCard({ onDone }: { onDone: () => void }) {
     try {
       await resetDemo();
       onDone();
-      toast('Demo reset — fresh shop ready');
+      toast(t('settings.resetDone'));
     } catch (e) {
-      toast(`Could not reset: ${(e as Error).message}`, 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -237,13 +240,13 @@ function ResetDemoCard({ onDone }: { onDone: () => void }) {
   return (
     <Card className="space-y-3 border-rose-400/20 p-5">
       <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-200/80">
-        <RotateCcw className="size-4" /> Demo
+        <RotateCcw className="size-4" /> {t('settings.demo')}
       </p>
       <p className="text-sm text-ink-300">
-        Clean up after testers: removes all bookings, clients and activity and restores the original demo shop. Barber photos are kept.
+        {t('settings.resetInfo')}
       </p>
       <Button variant="danger" className="w-full" loading={busy} icon={<RotateCcw className="size-4" />} onClick={reset}>
-        Reset demo
+        {t('settings.reset')}
       </Button>
     </Card>
   );
@@ -255,16 +258,16 @@ function PasswordCard({ user }: { user: User }) {
   const [busy, setBusy] = useState(false);
 
   const update = async () => {
-    if (pw.length < 3) return toast('Use at least 3 characters', 'error');
-    if (pw !== pw2) return toast("Passwords don't match", 'error');
+    if (pw.length < 3) return toast(t('team.errPassword'), 'error');
+    if (pw !== pw2) return toast(t('settings.pwMismatch'), 'error');
     setBusy(true);
     try {
       await adminSetPassword(user.id, pw);
       setPw('');
       setPw2('');
-      toast('Admin password updated');
+      toast(t('settings.pwUpdated'));
     } catch (e) {
-      toast(`Could not update: ${(e as Error).message}`, 'error');
+      toast(errorText(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -273,28 +276,28 @@ function PasswordCard({ user }: { user: User }) {
   // Demo safety: a tester changing this would lock everyone out of "Try as Admin"
   if (DEMO_MODE) {
     return (
-      <Section icon={KeyRound} title="Admin password">
+      <Section icon={KeyRound} title={t('settings.adminPassword')}>
         <p className="flex items-center gap-2.5 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-sm text-ink-300">
-          <KeyRound className="size-4 text-ink-400" /> Disabled in the demo
+          <KeyRound className="size-4 text-ink-400" /> {t('demo.disabled')}
         </p>
       </Section>
     );
   }
 
   return (
-    <Section icon={KeyRound} title="Admin password">
+    <Section icon={KeyRound} title={t('settings.adminPassword')}>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="New password">
+        <Field label={t('team.newPassword')}>
           <input type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} className={inputCls} />
         </Field>
-        <Field label="Repeat">
+        <Field label={t('settings.repeat')}>
           <input type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} className={inputCls} />
         </Field>
       </div>
       <Button variant="subtle" className="w-full" disabled={!pw} loading={busy} onClick={update}>
-        Update password
+        {t('settings.updatePassword')}
       </Button>
-      <p className="text-xs text-ink-500">Barber passwords are set in Team → tap a barber.</p>
+      <p className="text-xs text-ink-500">{t('settings.barberPwHint')}</p>
     </Section>
   );
 }

@@ -27,6 +27,7 @@ import {
   Users,
 } from 'lucide-react';
 import {
+  activityText,
   enableActivity,
   formatPrice,
   getActivity,
@@ -52,11 +53,10 @@ import {
   topClients,
   type PeriodKind,
 } from '../lib/analytics';
-import { formatDuration, formatShortDate, relativeDay, todayStr, tsToDateStr, tsToTime } from '../lib/time';
+import { WEEK_ORDER, formatDuration, formatShortDate, relativeDay, todayStr, tsToDateStr, tsToTime, weekdayName } from '../lib/time';
+import { t } from '../i18n';
 import { downloadFile, toCsv } from '../lib/util';
 
-const WEEK_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const WEEK_NAMES = ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'];
 
 type Category = 'all' | 'bookings' | 'clients' | 'team' | 'schedule' | 'access' | 'settings';
 
@@ -91,7 +91,7 @@ export default function Analytics({ stylistId }: { stylistId?: string }) {
 
   useEffect(() => {
     enableActivity()
-      .catch(() => toast('Could not load the activity log', 'error'))
+      .catch(() => toast(t('analytics.logFailed'), 'error'))
       .finally(() => setLoadingLog(false));
   }, []);
 
@@ -126,7 +126,10 @@ export default function Analytics({ stylistId }: { stylistId?: string }) {
   const exportCsv = () => {
     const rows = [...inP].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
     const csv = toCsv([
-      ['Date', 'Time', 'Client', 'Phone', 'Barber', 'Service', 'Minutes', 'Price', 'Status', 'Note', 'Booked at'],
+      [
+        t('csv.date'), t('csv.time'), t('csv.client'), t('csv.phone'), t('csv.barber'), t('csv.service'),
+        t('csv.minutes'), t('csv.price'), t('csv.status'), t('csv.note'), t('csv.bookedAt'),
+      ],
       ...rows.map((a) => {
         const u = getUserById(a.user_id);
         return [
@@ -138,14 +141,14 @@ export default function Analytics({ stylistId }: { stylistId?: string }) {
           a.service_name,
           a.duration_min,
           a.price,
-          a.status,
+          t(`status.${a.status}`),
           a.client_note,
-          a.created_at ? new Date(a.created_at).toLocaleString() : '',
+          a.created_at ? a.created_at.slice(0, 16).replace('T', ' ') : '',
         ];
       }),
     ]);
     downloadFile(`bookings-${period.start}-to-${period.end}.csv`, csv, 'text/csv;charset=utf-8');
-    toast(`Exported ${rows.length} booking${rows.length === 1 ? '' : 's'}`);
+    toast(t('analytics.exported', { n: rows.length }));
   };
 
   return (
@@ -158,22 +161,22 @@ export default function Analytics({ stylistId }: { stylistId?: string }) {
           setOffset(0);
         }}
         options={[
-          { value: 'week', label: 'Week' },
-          { value: 'month', label: 'Month' },
-          { value: 'year', label: 'Year' },
-          { value: 'all', label: 'All time' },
+          { value: 'week', label: t('analytics.week') },
+          { value: 'month', label: t('analytics.month') },
+          { value: 'year', label: t('analytics.year') },
+          { value: 'all', label: t('period.allTime') },
         ]}
       />
       <div className="flex items-center gap-2">
-        <IconButton label="Previous period" disabled={kind === 'all'} onClick={() => setOffset((o) => o - 1)}>
-          <ChevronLeft className="size-5" />
+        <IconButton label={t('analytics.prev')} disabled={kind === 'all'} onClick={() => setOffset((o) => o - 1)}>
+          <ChevronLeft className="size-5 rtl:-scale-x-100" />
         </IconButton>
         <div className="min-w-0 flex-1 text-center">
           <p className="truncate font-display text-[26px] leading-tight text-cream">{period.label}</p>
           <p className="h-4 text-[11px] uppercase tracking-[0.18em] text-ink-500">{period.caption}</p>
         </div>
-        <IconButton label="Next period" disabled={kind === 'all' || offset >= 0} onClick={() => setOffset((o) => o + 1)}>
-          <ChevronRight className="size-5" />
+        <IconButton label={t('analytics.next')} disabled={kind === 'all' || offset >= 0} onClick={() => setOffset((o) => o + 1)}>
+          <ChevronRight className="size-5 rtl:-scale-x-100" />
         </IconButton>
       </div>
 
@@ -182,7 +185,7 @@ export default function Analytics({ stylistId }: { stylistId?: string }) {
           value={barber}
           onChange={setBarber}
           options={[
-            { value: 'all', label: 'All barbers', lead: <Users className="size-4" /> },
+            { value: 'all', label: t('analytics.allBarbers'), lead: <Users className="size-4" /> },
             ...stylists.map((s) => ({ value: s.id, label: s.name.split(' ')[0], lead: <Avatar name={s.name} src={s.image} size={22} /> })),
           ]}
         />
@@ -190,44 +193,42 @@ export default function Analytics({ stylistId }: { stylistId?: string }) {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        <Kpi label="Revenue" value={formatPrice(m.revenue)} delta={pm && change(m.revenue, pm.revenue)} hint={`${m.completed} completed`} feature />
-        <Kpi label="Appointments" value={String(m.total - m.cancelled)} delta={pm && change(m.total - m.cancelled, pm.total - pm.cancelled)} hint={`${m.upcoming} still upcoming`} />
-        <Kpi label="Avg. ticket" value={formatPrice(Math.round(m.avgTicket * 100) / 100)} delta={pm && change(m.avgTicket, pm.avgTicket)} hint="per completed visit" />
-        <Kpi label="Expected" value={formatPrice(m.expected)} hint="upcoming bookings" />
+        <Kpi label={t('analytics.revenue')} value={formatPrice(m.revenue)} delta={pm && change(m.revenue, pm.revenue)} hint={t('analytics.completedN', { n: m.completed })} feature />
+        <Kpi label={t('analytics.appointments')} value={String(m.total - m.cancelled)} delta={pm && change(m.total - m.cancelled, pm.total - pm.cancelled)} hint={t('analytics.stillUpcoming', { n: m.upcoming })} />
+        <Kpi label={t('analytics.avgTicket')} value={formatPrice(Math.round(m.avgTicket * 100) / 100)} delta={pm && change(m.avgTicket, pm.avgTicket)} hint={t('analytics.perVisit')} />
+        <Kpi label={t('analytics.expected')} value={formatPrice(m.expected)} hint={t('analytics.upcomingBookings')} />
         <Kpi
-          label={isBarber ? 'Clients' : 'New clients'}
+          label={isBarber ? t('analytics.clients') : t('analytics.newClients')}
           value={String(isBarber ? m.clients : m.newClients)}
           delta={pm && (isBarber ? change(m.clients, pm.clients) : change(m.newClients, pm.newClients))}
-          hint={isBarber ? `${m.returning} returning` : `${m.clients} served · ${m.returning} returning`}
+          hint={isBarber ? t('analytics.returning', { n: m.returning }) : `${t('analytics.served', { n: m.clients })} · ${t('analytics.returning', { n: m.returning })}`}
         />
-        <Kpi label="Cancellations" value={String(m.cancelled)} hint={`${pct(m.cancelRate)} of bookings`} delta={pm && change(m.cancelled, pm.cancelled)} invert />
-        <Kpi label="No-shows" value={String(m.noShow)} hint={`${pct(m.noShowRate)} of visits`} delta={pm && change(m.noShow, pm.noShow)} invert />
-        <Kpi label="Chair time" value={formatDuration(m.bookedMinutes)} hint="booked & completed" />
+        <Kpi label={t('analytics.cancellations')} value={String(m.cancelled)} hint={t('analytics.ofBookings', { pct: pct(m.cancelRate) })} delta={pm && change(m.cancelled, pm.cancelled)} invert />
+        <Kpi label={t('analytics.noShows')} value={String(m.noShow)} hint={t('analytics.ofVisits', { pct: pct(m.noShowRate) })} delta={pm && change(m.noShow, pm.noShow)} invert />
+        <Kpi label={t('analytics.chairTime')} value={formatDuration(m.bookedMinutes)} hint={t('analytics.bookedCompleted')} />
       </div>
 
       {/* Revenue over time */}
       <Card className="p-5">
         <div className="mb-6 flex items-end justify-between gap-3">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-400">Revenue</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-400">{t('analytics.revenue')}</p>
             <p className="tnum mt-1 font-display text-[34px] leading-none text-cream">{formatPrice(m.revenue)}</p>
           </div>
-          <p className="text-right text-xs text-ink-500">
-            Completed visits
-            <br />
-            by {period.bucket}
+          <p className="max-w-[45%] text-end text-xs text-ink-500">
+            {t(period.bucket === 'day' ? 'analytics.byDay' : period.bucket === 'month' ? 'analytics.byMonth' : 'analytics.byYear')}
           </p>
         </div>
         <BarChart
-          title="Revenue over time"
+          title={t('analytics.revenueOverTime')}
           format={formatPrice}
-          emptyText="No completed visits in this period yet"
+          emptyText={t('analytics.noCompletedYet')}
           data={series.map((s) => ({
             key: s.bucket.key,
             label: s.bucket.label,
             value: s.revenue,
             tooltip: s.bucket.title,
-            detail: `${s.count} visit${s.count === 1 ? '' : 's'}`,
+            detail: t('analytics.visits', { n: s.count }),
           }))}
         />
       </Card>
@@ -235,15 +236,19 @@ export default function Analytics({ stylistId }: { stylistId?: string }) {
       <div className="grid gap-4 sm:grid-cols-2">
         {!scopeId && (
           <Card className="p-5">
-            <CardTitle>By barber</CardTitle>
+            <CardTitle>{t('analytics.byBarber')}</CardTitle>
             <RankList
-              emptyText="No bookings in this period"
+              emptyText={t('analytics.noBookings')}
               rows={barbers.map((b) => ({
                 key: b.id,
-                label: b.stylist?.name ?? 'Former barber',
+                label: b.stylist?.name ?? t('analytics.formerBarber'),
                 value: b.revenue || b.bookings / 1000,
                 display: formatPrice(b.revenue),
-                sub: `${b.completed} completed · ${b.bookings} booked${m.revenue ? ` · ${pct(b.revenue / m.revenue)} of revenue` : ''}`,
+                sub: [
+                  t('analytics.completedN', { n: b.completed }),
+                  t('analytics.bookedN', { n: b.bookings }),
+                  ...(m.revenue ? [t('analytics.ofRevenue', { pct: pct(b.revenue / m.revenue) })] : []),
+                ].join(' · '),
                 lead: <Avatar name={b.stylist?.name ?? '?'} src={b.stylist?.image} size={36} />,
               }))}
             />
@@ -251,65 +256,65 @@ export default function Analytics({ stylistId }: { stylistId?: string }) {
         )}
 
         <Card className="p-5">
-          <CardTitle>Top services</CardTitle>
+          <CardTitle>{t('analytics.topServices')}</CardTitle>
           <RankList
-            emptyText="No bookings in this period"
+            emptyText={t('analytics.noBookings')}
             rows={services.map((s) => ({
               key: s.id,
               label: s.name,
               value: s.count,
               display: `${s.count}×`,
-              sub: `${formatPrice(s.revenue)} earned`,
+              sub: t('analytics.earned', { price: formatPrice(s.revenue) }),
             }))}
           />
         </Card>
 
         <Card className="p-5">
-          <CardTitle>Busiest days</CardTitle>
+          <CardTitle>{t('analytics.busiestDays')}</CardTitle>
           <BarChart
-            title="Appointments by weekday"
+            title={t('analytics.byWeekday')}
             integer
             height={120}
             format={count}
-            emptyText="No bookings in this period"
+            emptyText={t('analytics.noBookings')}
             data={weekdays.map((v, i) => ({
-              key: WEEK_LABELS[i],
-              label: WEEK_LABELS[i],
+              key: String(WEEK_ORDER[i]),
+              label: weekdayName(WEEK_ORDER[i], 'short'),
               value: v,
-              tooltip: WEEK_NAMES[i],
-              detail: `${v} appointment${v === 1 ? '' : 's'}`,
+              tooltip: weekdayName(WEEK_ORDER[i]),
+              detail: t('analytics.appointmentsN', { n: v }),
             }))}
           />
         </Card>
 
         <Card className="p-5">
-          <CardTitle>Peak hours</CardTitle>
+          <CardTitle>{t('analytics.peakHours')}</CardTitle>
           <BarChart
-            title="Appointments by start hour"
+            title={t('analytics.byHour')}
             integer
             height={120}
             format={count}
-            emptyText="No bookings in this period"
+            emptyText={t('analytics.noBookings')}
             data={hours.map((h) => ({
               key: String(h.hour),
               label: String(h.hour),
               value: h.count,
               tooltip: `${String(h.hour).padStart(2, '0')}:00 – ${String(h.hour + 1).padStart(2, '0')}:00`,
-              detail: `${h.count} appointment${h.count === 1 ? '' : 's'}`,
+              detail: t('analytics.appointmentsN', { n: h.count }),
             }))}
           />
         </Card>
 
         <Card className={cx('p-5', scopeId ? '' : 'sm:col-span-2')}>
-          <CardTitle>Top clients</CardTitle>
+          <CardTitle>{t('analytics.topClients')}</CardTitle>
           <RankList
-            emptyText="No completed visits in this period"
+            emptyText={t('analytics.noCompleted')}
             rows={clients.map((c) => ({
               key: c.id,
-              label: c.user?.full_name ?? 'Client',
+              label: c.user?.full_name ?? t('barber.client'),
               value: c.spend,
               display: formatPrice(c.spend),
-              sub: `${c.visits} visit${c.visits === 1 ? '' : 's'} · last ${formatShortDate(c.last)}`,
+              sub: `${t('analytics.visits', { n: c.visits })} · ${t('analytics.last', { date: formatShortDate(c.last) })}`,
               lead: <Avatar name={c.user?.full_name ?? '?'} size={36} />,
             }))}
           />
@@ -320,7 +325,7 @@ export default function Analytics({ stylistId }: { stylistId?: string }) {
 
       {!isBarber && (
         <Button variant="outline" className="w-full" icon={<Download className="size-4" />} onClick={exportCsv}>
-          Export bookings (CSV)
+          {t('analytics.export')}
         </Button>
       )}
     </div>
@@ -370,7 +375,7 @@ function Kpi({
             {pct(Math.abs(delta as number))}
           </span>
         )}
-        {delta === null && <span className="rounded-full bg-white/[0.05] px-1.5 py-0.5 text-[11px] text-ink-300">New</span>}
+        {delta === null && <span className="rounded-full bg-white/[0.05] px-1.5 py-0.5 text-[11px] text-ink-300">{t('analytics.new')}</span>}
         {hint && <span className="text-[11px] text-ink-500">{hint}</span>}
       </div>
     </div>
@@ -390,7 +395,7 @@ function ActivityLog({ period, scopeId, loading }: { period: ReturnType<typeof g
     if (!inPeriod(tsToDateStr(e.created_at), period)) return false;
     if (scopeId && e.stylist_id !== scopeId) return false;
     if (cat !== 'all' && categoryOf(e.type) !== cat) return false;
-    if (q && !`${e.message} ${e.actor_name ?? ''}`.toLowerCase().includes(q.toLowerCase())) return false;
+    if (q && !`${activityText(e)} ${e.actor_name ?? ''}`.toLowerCase().includes(q.toLowerCase())) return false;
     return true;
   });
 
@@ -407,19 +412,19 @@ function ActivityLog({ period, scopeId, loading }: { period: ReturnType<typeof g
     <Card className="p-5">
       <div className="mb-4 flex items-end justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-400">Activity</p>
-          <p className="mt-1 text-sm text-ink-300">Everything that happened in this period</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-400">{t('analytics.activity')}</p>
+          <p className="mt-1 text-sm text-ink-300">{t('analytics.activityText')}</p>
         </div>
-        <span className="tnum text-xs text-ink-500">{events.length} events</span>
+        <span className="tnum shrink-0 text-xs text-ink-500">{t('analytics.events', { n: events.length })}</span>
       </div>
 
       <div className="relative mb-3">
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-500" />
+        <Search className="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-500" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search clients, barbers, services…"
-          className={cx(inputCls, 'h-11 pl-10 text-sm')}
+          placeholder={t('analytics.search')}
+          className={cx(inputCls, 'h-11 ps-10 text-sm')}
         />
       </div>
       <Chips
@@ -429,22 +434,22 @@ function ActivityLog({ period, scopeId, loading }: { period: ReturnType<typeof g
           setLimit(40);
         }}
         options={[
-          { value: 'all', label: 'All' },
-          { value: 'bookings', label: 'Bookings' },
-          { value: 'clients', label: 'New clients' },
-          { value: 'schedule', label: 'Schedule' },
-          { value: 'team', label: 'Team & services' },
-          { value: 'access', label: 'Sign-ins' },
-          { value: 'settings', label: 'Settings' },
+          { value: 'all', label: t('analytics.catAll') },
+          { value: 'bookings', label: t('analytics.catBookings') },
+          { value: 'clients', label: t('analytics.newClients') },
+          { value: 'schedule', label: t('analytics.catSchedule') },
+          { value: 'team', label: t('analytics.catTeam') },
+          { value: 'access', label: t('analytics.catAccess') },
+          { value: 'settings', label: t('analytics.catSettings') },
         ]}
       />
 
       {loading ? (
-        <p className="py-8 text-center text-sm text-ink-500">Loading activity…</p>
+        <p className="py-8 text-center text-sm text-ink-500">{t('analytics.loadingLog')}</p>
       ) : groups.length === 0 ? (
         <div className="py-10 text-center">
           <Sparkles className="mx-auto size-6 text-gold-300/70" strokeWidth={1.5} />
-          <p className="mt-3 text-sm text-ink-400">Nothing recorded in this period</p>
+          <p className="mt-3 text-sm text-ink-400">{t('analytics.nothingRecorded')}</p>
         </div>
       ) : (
         <div className="mt-4 space-y-5">
@@ -466,11 +471,11 @@ function ActivityLog({ period, scopeId, loading }: { period: ReturnType<typeof g
                         <Icon className="size-4" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm leading-snug text-cream">{e.message}</p>
+                        <p className="text-sm leading-snug text-cream">{activityText(e)}</p>
                         <p className="tnum mt-0.5 text-[11.5px] text-ink-500">
                           {tsToTime(e.created_at)}
-                          {e.actor_name && ` · by ${e.actor_name}`}
-                          {e.amount != null && e.type === 'booking_completed' && ` · ${formatPrice(e.amount)}`}
+                          {e.actor_name && ` · ${t('analytics.by', { name: e.actor_role === 'system' ? t('analytics.system') : e.actor_name })}`}
+                          {e.amount != null && !e.params && e.type === 'booking_completed' && ` · ${formatPrice(e.amount)}`}
                         </p>
                       </div>
                     </li>
@@ -481,7 +486,7 @@ function ActivityLog({ period, scopeId, loading }: { period: ReturnType<typeof g
           ))}
           {events.length > limit && (
             <Button variant="subtle" className="w-full" onClick={() => setLimit((l) => l + 60)}>
-              Show more ({events.length - limit} older)
+              {t('analytics.showMore', { n: events.length - limit })}
             </Button>
           )}
         </div>

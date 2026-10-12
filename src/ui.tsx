@@ -18,9 +18,11 @@ import {
   type SelectHTMLAttributes,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Check, ChevronDown, Info, Loader2, Scissors, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Globe, Info, Loader2, Scissors, X } from 'lucide-react';
 import type { AppointmentStatus } from './types';
-import { parseDate, WEEKDAYS_SHORT } from './lib/time';
+import { formatMonthShort, parseDate, weekdayName } from './lib/time';
+import { LANGUAGES, setLang, t, useLang, type MessageKey } from './i18n';
+import { useState } from 'react';
 
 export function cx(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(' ');
@@ -110,7 +112,7 @@ export function Card({ className, children, onClick }: { className?: string; chi
     <Tag
       onClick={onClick}
       className={cx(
-        'block w-full rounded-3xl border border-white/[0.07] bg-ink-900/80 text-left',
+        'block w-full rounded-3xl border border-white/[0.07] bg-ink-900/80 text-start',
         'shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]',
         onClick && 'transition-all hover:border-white/[0.12] hover:bg-ink-850 active:scale-[0.99]',
         className
@@ -229,12 +231,12 @@ export function Portrait({ name, src, className }: { name: string; src?: string 
 // STATUS
 // ============================================================
 
-export const STATUS_META: Record<AppointmentStatus, { label: string; cls: string; dot: string }> = {
-  pending: { label: 'Pending', cls: 'text-amber-200 bg-amber-400/10 ring-amber-300/25', dot: 'bg-amber-300' },
-  booked: { label: 'Confirmed', cls: 'text-emerald-200 bg-emerald-400/10 ring-emerald-300/25', dot: 'bg-emerald-300' },
-  completed: { label: 'Completed', cls: 'text-sky-200 bg-sky-400/10 ring-sky-300/25', dot: 'bg-sky-300' },
-  cancelled: { label: 'Cancelled', cls: 'text-rose-200 bg-rose-400/10 ring-rose-300/25', dot: 'bg-rose-300' },
-  no_show: { label: 'No-show', cls: 'text-orange-200 bg-orange-400/10 ring-orange-300/25', dot: 'bg-orange-300' },
+export const STATUS_META: Record<AppointmentStatus, { label: MessageKey; cls: string; dot: string }> = {
+  pending: { label: 'status.pending', cls: 'text-amber-200 bg-amber-400/10 ring-amber-300/25', dot: 'bg-amber-300' },
+  booked: { label: 'status.booked', cls: 'text-emerald-200 bg-emerald-400/10 ring-emerald-300/25', dot: 'bg-emerald-300' },
+  completed: { label: 'status.completed', cls: 'text-sky-200 bg-sky-400/10 ring-sky-300/25', dot: 'bg-sky-300' },
+  cancelled: { label: 'status.cancelled', cls: 'text-rose-200 bg-rose-400/10 ring-rose-300/25', dot: 'bg-rose-300' },
+  no_show: { label: 'status.no_show', cls: 'text-orange-200 bg-orange-400/10 ring-orange-300/25', dot: 'bg-orange-300' },
 };
 
 export function StatusPill({ status }: { status: AppointmentStatus }) {
@@ -247,7 +249,7 @@ export function StatusPill({ status }: { status: AppointmentStatus }) {
       )}
     >
       <span className={cx('size-1.5 rounded-full', m.dot)} />
-      {m.label}
+      {t(m.label)}
     </span>
   );
 }
@@ -276,10 +278,10 @@ export function Field({ label, hint, children, className }: { label: string; hin
 export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <div className={cx('relative', className)}>
-      <select {...rest} className={cx(inputCls, 'appearance-none pr-10')}>
+      <select {...rest} className={cx(inputCls, 'appearance-none pe-10')}>
         {children}
       </select>
-      <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-400" />
+      <ChevronDown className="pointer-events-none absolute end-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-400" />
     </div>
   );
 }
@@ -301,7 +303,7 @@ export function Toggle({
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="flex w-full items-center gap-4 text-left"
+      className="flex w-full items-center gap-4 text-start"
     >
       <span className="min-w-0 flex-1">
         <span className="block text-[15px] text-cream">{label}</span>
@@ -316,7 +318,7 @@ export function Toggle({
         <span
           className={cx(
             'absolute top-1 size-5 rounded-full bg-white shadow transition-all duration-200',
-            checked ? 'left-6' : 'left-1'
+            checked ? 'start-6' : 'start-1'
           )}
         />
       </span>
@@ -343,7 +345,7 @@ export function Segmented<T extends string>({
           type="button"
           onClick={() => onChange(o.value)}
           className={cx(
-            'h-9 flex-1 whitespace-nowrap rounded-xl px-2 text-[13px] font-medium transition-all duration-200',
+            'min-h-9 min-w-0 flex-1 rounded-xl px-1.5 py-1 text-[13px] font-medium leading-tight transition-all duration-200 [hyphens:auto] [overflow-wrap:anywhere]',
             value === o.value ? 'bg-cream text-ink-950 shadow-sm' : 'text-ink-300 hover:text-cream'
           )}
         >
@@ -449,12 +451,12 @@ export function BottomNav<T extends string>({
               <span className="relative">
                 <Icon className="size-[22px]" strokeWidth={active ? 1.9 : 1.6} />
                 {!!badge && (
-                  <span className="tnum absolute -right-2.5 -top-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-gold-400 px-1 text-[10px] font-bold text-ink-950">
+                  <span className="tnum absolute -end-2.5 -top-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-gold-400 px-1 text-[10px] font-bold text-ink-950">
                     {badge > 99 ? '99+' : badge}
                   </span>
                 )}
               </span>
-              <span className="text-[10.5px] font-medium tracking-wide">{label}</span>
+              <span className="max-w-full truncate px-0.5 text-[10.5px] font-medium tracking-wide">{label}</span>
             </button>
           );
         })}
@@ -529,8 +531,11 @@ export function DateStrip({
     const el = ref.current?.querySelector<HTMLElement>(`[data-date="${value}"]`);
     const box = ref.current;
     if (el && box) {
-      box.scrollTo({
-        left: el.offsetLeft - box.clientWidth / 2 + el.clientWidth / 2,
+      // Works in both directions (LTR and Arabic RTL): scroll by the distance between centres
+      const e = el.getBoundingClientRect();
+      const b = box.getBoundingClientRect();
+      box.scrollBy({
+        left: e.left + e.width / 2 - (b.left + b.width / 2),
         behavior: firstScroll.current ? 'auto' : 'smooth',
       });
       firstScroll.current = false;
@@ -558,13 +563,13 @@ export function DateStrip({
             )}
           >
             <span className={cx('text-[10px] font-semibold uppercase tracking-[0.12em]', selected ? 'text-ink-600' : 'text-ink-400')}>
-              {WEEKDAYS_SHORT[dt.getDay()]}
+              {weekdayName(dt.getDay(), 'short')}
             </span>
             <span className="tnum mt-0.5 text-[20px] font-semibold leading-none">{dt.getDate()}</span>
             <span className={cx('mt-1 h-3 text-[9.5px] font-medium', selected ? 'text-ink-600' : 'text-ink-500')}>
-              {d.note ?? dt.toLocaleDateString('en-US', { month: 'short' })}
+              {d.note ?? formatMonthShort(d.date)}
             </span>
-            {d.marked && !selected && <span className="absolute right-2 top-2 size-1.5 rounded-full bg-gold-400" />}
+            {d.marked && !selected && <span className="absolute end-2 top-2 size-1.5 rounded-full bg-gold-400" />}
           </button>
         );
       })}
@@ -625,7 +630,7 @@ export function Sheet({
             <h3 className="font-display text-[28px] leading-tight text-cream">{title}</h3>
             {subtitle && <p className="mt-1 text-sm text-ink-400">{subtitle}</p>}
           </div>
-          <IconButton label="Close" onClick={onClose} className="-mr-2 -mt-1">
+          <IconButton label={t('common.close')} onClick={onClose} className="-me-2 -mt-1">
             <X className="size-5" />
           </IconButton>
         </div>
@@ -696,10 +701,10 @@ export function DialogHost() {
         {d.message && <p className="mt-2 text-sm leading-relaxed text-ink-300">{d.message}</p>}
         <div className="mt-6 grid grid-cols-2 gap-2.5">
           <Button variant="outline" onClick={() => close(false)}>
-            {d.cancelText ?? 'Keep'}
+            {d.cancelText ?? t('common.keep')}
           </Button>
           <Button variant={d.destructive ? 'danger' : 'gold'} onClick={() => close(true)} autoFocus>
-            {d.confirmText ?? 'Confirm'}
+            {d.confirmText ?? t('common.confirm')}
           </Button>
         </div>
       </div>
@@ -733,6 +738,17 @@ export function toast(message: string, kind: ToastKind = 'success'): void {
   }, kind === 'error' ? 3500 : 2500);
 }
 
+/** Close every dialog and toast and unlock scrolling — used when signing out */
+export function closeOverlays(): void {
+  if (dialogState) {
+    dialogState.resolve(false);
+    dialogState = null;
+    notifyDialog();
+  }
+  clearToasts();
+  document.body.style.overflow = '';
+}
+
 /** Remove every toast at once (e.g. when the user switches tabs) */
 export function clearToasts(): void {
   if (toasts.length === 0) return;
@@ -755,26 +771,91 @@ export function Toaster() {
       className="pointer-events-none fixed inset-x-0 top-0 z-[70] flex flex-col items-center gap-2 px-4"
       style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
     >
-      {list.map((t) => (
+      {list.map((item) => (
         <div
-          key={t.id}
+          key={item.id}
           role="status"
           className="animate-toast pointer-events-auto flex max-w-sm items-center gap-2.5 rounded-2xl border border-white/10 bg-ink-850/95 px-3.5 py-2.5 text-[13px] text-cream shadow-2xl backdrop-blur-xl"
         >
           <span
             className={cx(
               'grid size-6 shrink-0 place-items-center rounded-full',
-              t.kind === 'success' && 'bg-emerald-400/15 text-emerald-300',
-              t.kind === 'error' && 'bg-rose-400/15 text-rose-300',
-              t.kind === 'info' && 'bg-gold-400/15 text-gold-300'
+              item.kind === 'success' && 'bg-emerald-400/15 text-emerald-300',
+              item.kind === 'error' && 'bg-rose-400/15 text-rose-300',
+              item.kind === 'info' && 'bg-gold-400/15 text-gold-300'
             )}
           >
-            {t.kind === 'success' ? <Check className="size-3.5" /> : t.kind === 'error' ? <X className="size-3.5" /> : <Info className="size-3.5" />}
+            {item.kind === 'success' ? <Check className="size-3.5" /> : item.kind === 'error' ? <X className="size-3.5" /> : <Info className="size-3.5" />}
           </span>
-          {t.message}
+          {item.message}
         </div>
       ))}
     </div>,
     document.body
+  );
+}
+
+// ============================================================
+// LANGUAGE SWITCHER — globe button or settings row + picker sheet
+// ============================================================
+
+/** Pick the app language; the choice is remembered on this device */
+export function LanguageSwitcher({ variant = 'icon', className }: { variant?: 'icon' | 'row'; className?: string }) {
+  const lang = useLang();
+  const [open, setOpen] = useState(false);
+  const current = LANGUAGES.find((l) => l.code === lang)!;
+  return (
+    <>
+      {variant === 'icon' ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={t('common.language')}
+          title={t('common.language')}
+          className={cx(
+            'inline-flex h-10 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 text-[13px] font-medium text-ink-200 transition hover:border-gold-400/40 hover:text-cream',
+            className
+          )}
+        >
+          <Globe className="size-4 text-gold-300" strokeWidth={1.7} />
+          <span className="uppercase">{current.code}</span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className={cx('flex w-full items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3.5 text-start transition hover:bg-white/[0.04]', className)}
+        >
+          <Globe className="size-5 shrink-0 text-gold-300" strokeWidth={1.6} />
+          <span className="flex-1 text-[15px] text-cream">{t('common.language')}</span>
+          <span className="text-sm text-ink-300">{current.name}</span>
+          <ChevronRight className="size-4 text-ink-500 rtl:-scale-x-100" />
+        </button>
+      )}
+      <Sheet open={open} onClose={() => setOpen(false)} title={t('common.language')}>
+        <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+          {LANGUAGES.map((l) => (
+            <li key={l.code}>
+              <button
+                type="button"
+                lang={l.code}
+                dir={l.rtl ? 'rtl' : 'ltr'}
+                onClick={() => {
+                  setLang(l.code);
+                  setOpen(false);
+                }}
+                className={cx(
+                  'flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-[15px] transition',
+                  l.code === lang ? 'border-gold-400/50 bg-gold-400/10 text-gold-100' : 'border-white/[0.07] text-cream hover:bg-white/[0.04]'
+                )}
+              >
+                {l.name}
+                {l.code === lang && <Check className="size-4 text-gold-300" />}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Sheet>
+    </>
   );
 }

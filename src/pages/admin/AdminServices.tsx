@@ -8,6 +8,7 @@ import type { Service } from '../../types';
 import { deleteService, formatPrice, getServices, getSettings, moveService, saveService, useStoreVersion } from '../../store';
 import { Button, Card, EmptyState, Field, IconButton, Sheet, Toggle, confirmDialog, cx, inputCls, textareaCls, toast } from '../../ui';
 import { formatDuration } from '../../lib/time';
+import { t } from '../../i18n';
 
 type Draft = Omit<Service, 'id'> & { id?: string };
 
@@ -22,7 +23,7 @@ export default function AdminServices() {
     try {
       await moveService(id, dir);
     } catch {
-      toast('Could not reorder', 'error');
+      toast(t('services.reorderFailed'), 'error');
     }
   };
 
@@ -30,21 +31,21 @@ export default function AdminServices() {
     <div className="space-y-4">
       {services.length === 0 ? (
         <Card>
-          <EmptyState icon={Scissors} title="No services yet" text="Add what you offer so clients can book it." />
+          <EmptyState icon={Scissors} title={t('services.empty')} text={t('services.emptyText')} />
         </Card>
       ) : (
         <Card className="divide-y divide-white/[0.05] overflow-hidden">
           {services.map((s, i) => (
-            <div key={s.id} className={cx('flex items-center gap-2 py-2 pl-2 pr-4', !s.active && 'opacity-60')}>
+            <div key={s.id} className={cx('flex items-center gap-2 py-2 ps-2 pe-4', !s.active && 'opacity-60')}>
               <div className="flex flex-col">
-                <IconButton label="Move up" disabled={i === 0} onClick={() => move(s.id, -1)} className="size-8">
+                <IconButton label={t('services.moveUp')} disabled={i === 0} onClick={() => move(s.id, -1)} className="size-8">
                   <ChevronUp className="size-4" />
                 </IconButton>
-                <IconButton label="Move down" disabled={i === services.length - 1} onClick={() => move(s.id, 1)} className="size-8">
+                <IconButton label={t('services.moveDown')} disabled={i === services.length - 1} onClick={() => move(s.id, 1)} className="size-8">
                   <ChevronDown className="size-4" />
                 </IconButton>
               </div>
-              <button onClick={() => setEditing({ ...s })} className="flex min-w-0 flex-1 items-center gap-3 py-2 text-left">
+              <button onClick={() => setEditing({ ...s })} className="flex min-w-0 flex-1 items-center gap-3 py-2 text-start">
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="truncate font-medium text-cream">{s.name}</span>
@@ -52,7 +53,7 @@ export default function AdminServices() {
                   </span>
                   <span className="mt-0.5 flex items-center gap-1.5 text-[13px] text-ink-400">
                     <Clock className="size-3.5" /> {formatDuration(s.duration_min)}
-                    {!s.active && <span className="text-ink-500">· hidden</span>}
+                    {!s.active && <span className="text-ink-500">· {t('services.hidden')}</span>}
                   </span>
                 </span>
                 <span className="tnum font-display text-[22px] text-cream">{formatPrice(s.price)}</span>
@@ -63,7 +64,7 @@ export default function AdminServices() {
       )}
 
       <Button variant="gold" size="lg" className="w-full" icon={<Plus className="size-[18px]" />} onClick={() => setEditing({ ...EMPTY, sort: services.length + 1 })}>
-        Add a service
+        {t('services.add')}
       </Button>
 
       {editing && <ServiceForm draft={editing} onClose={() => setEditing(null)} />}
@@ -81,16 +82,16 @@ function ServiceForm({ draft, onClose }: { draft: Draft; onClose: () => void }) 
 
   const save = async () => {
     const price = Number(priceText.replace(',', '.'));
-    if (d.name.trim().length < 2) return setError('Give the service a name');
-    if (!Number.isFinite(price) || price < 0) return setError('Enter a valid price');
-    if (d.duration_min < 5 || d.duration_min > 600) return setError('Duration must be between 5 minutes and 10 hours');
+    if (d.name.trim().length < 2) return setError(t('services.errName'));
+    if (!Number.isFinite(price) || price < 0) return setError(t('services.errPrice'));
+    if (d.duration_min < 5 || d.duration_min > 600) return setError(t('services.errDuration'));
     setSaving(true);
     try {
       await saveService({ ...d, name: d.name.trim(), description: d.description.trim(), price });
-      toast(d.id ? 'Service updated' : 'Service added');
+      toast(d.id ? t('services.updated') : t('services.added'));
       onClose();
     } catch (e) {
-      setError(`Could not save: ${(e as Error).message}`);
+      setError(t('errors.generic'));
       setSaving(false);
     }
   };
@@ -98,19 +99,19 @@ function ServiceForm({ draft, onClose }: { draft: Draft; onClose: () => void }) 
   const remove = async () => {
     if (!d.id) return;
     const ok = await confirmDialog({
-      title: `Delete “${d.name}”?`,
-      message: 'Clients won’t be able to book it any more. Past bookings and analytics keep their records.',
-      confirmText: 'Delete',
-      cancelText: 'Keep',
+      title: t('services.deleteTitle', { name: d.name }),
+      message: t('services.deleteText'),
+      confirmText: t('services.delete'),
+      cancelText: t('common.keep'),
       destructive: true,
     });
     if (!ok) return;
     try {
       await deleteService(d.id);
-      toast('Service deleted');
+      toast(t('services.deleted'));
       onClose();
     } catch {
-      toast('Could not delete', 'error');
+      toast(t('services.deleteFailed'), 'error');
     }
   };
 
@@ -118,41 +119,41 @@ function ServiceForm({ draft, onClose }: { draft: Draft; onClose: () => void }) 
     <Sheet
       open
       onClose={onClose}
-      title={d.id ? 'Edit service' : 'New service'}
+      title={d.id ? t('services.editTitle') : t('services.newTitle')}
       footer={
         <div className="flex gap-2.5">
           {d.id && (
             <Button variant="danger" onClick={remove} icon={<Trash2 className="size-4" />}>
-              Delete
+              {t('services.delete')}
             </Button>
           )}
           <Button variant="gold" className="flex-1" loading={saving} onClick={save}>
-            {d.id ? 'Save changes' : 'Add service'}
+            {d.id ? t('team.saveChanges') : t('services.addService')}
           </Button>
         </div>
       }
     >
       <div className="space-y-5">
-        <Field label="Name">
-          <input value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. Skin Fade" className={inputCls} />
+        <Field label={t('services.name')}>
+          <input value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder={t('services.namePlaceholder')} className={inputCls} />
         </Field>
-        <Field label="Description">
-          <textarea value={d.description} onChange={(e) => set({ description: e.target.value })} maxLength={160} placeholder="What's included" className={textareaCls} />
+        <Field label={t('services.description')}>
+          <textarea value={d.description} onChange={(e) => set({ description: e.target.value })} maxLength={160} placeholder={t('services.descriptionPlaceholder')} className={textareaCls} />
         </Field>
-        <Field label="Price">
+        <Field label={t('client.price')}>
           <div className="relative">
-            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-400">{currency}</span>
+            <span className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-ink-400">{currency}</span>
             <input
               value={priceText}
               onChange={(e) => setPriceText(e.target.value)}
               inputMode="decimal"
-              className={cx(inputCls, 'tnum', currency.length > 1 ? 'pl-14' : 'pl-9')}
+              className={cx(inputCls, 'tnum', currency.length > 1 ? 'ps-14' : 'ps-9')}
             />
           </div>
         </Field>
         <DurationPicker value={d.duration_min} onChange={(m) => set({ duration_min: m })} />
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
-          <Toggle checked={d.active} onChange={(v) => set({ active: v })} label="Visible to clients" description="Hidden services stay in your records." />
+          <Toggle checked={d.active} onChange={(v) => set({ active: v })} label={t('services.visible')} description={t('services.visibleText')} />
         </div>
         {error && <p className="text-sm text-rose-300">{error}</p>}
       </div>
@@ -170,24 +171,24 @@ function DurationPicker({ value, onChange }: { value: number; onChange: (m: numb
 
   return (
     <div>
-      <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-400">Duration</span>
+      <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-400">{t('booking.duration')}</span>
       <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
         <div className="flex items-center justify-between gap-3">
-          <IconButton label="5 minutes less" onClick={() => onChange(clamp(value - 5))} className="border border-white/10">
+          <IconButton label={t('services.less')} onClick={() => onChange(clamp(value - 5))} className="border border-white/10">
             <Minus className="size-4" />
           </IconButton>
           <div className="text-center">
             <p className="tnum font-display text-[40px] leading-none text-cream">{formatDuration(value)}</p>
-            <p className="mt-1 text-xs text-ink-500">{value} minutes</p>
+            <p className="mt-1 text-xs text-ink-500">{t('services.minutesN', { n: value })}</p>
           </div>
-          <IconButton label="5 minutes more" onClick={() => onChange(clamp(value + 5))} className="border border-white/10">
+          <IconButton label={t('services.more')} onClick={() => onChange(clamp(value + 5))} className="border border-white/10">
             <Plus className="size-4" />
           </IconButton>
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-2.5">
           <label className="block">
-            <span className="mb-1 block text-[11px] text-ink-500">Hours</span>
+            <span className="mb-1 block text-[11px] text-ink-500">{t('services.hours')}</span>
             <input
               type="number"
               min={0}
@@ -199,7 +200,7 @@ function DurationPicker({ value, onChange }: { value: number; onChange: (m: numb
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-[11px] text-ink-500">Minutes</span>
+            <span className="mb-1 block text-[11px] text-ink-500">{t('services.minutes')}</span>
             <input
               type="number"
               min={0}

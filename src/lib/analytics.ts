@@ -7,7 +7,10 @@
 // ============================================================
 
 import type { Appointment, Stylist, User } from '../types';
-import { addDays, formatMonthDay, parseDate, toDateStr, todayStr, tsToDateStr, WEEKDAYS_SHORT } from './time';
+import { addDays, parseDate, toDateStr, todayStr, tsToDateStr, weekdayName } from './time';
+import { getLocale, t as tr } from '../i18n';
+
+const dtf = (opts: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(getLocale(), opts);
 
 export type PeriodKind = 'week' | 'month' | 'year' | 'all';
 
@@ -30,17 +33,15 @@ export function getPeriod(kind: PeriodKind, offset: number, bounds: { earliest: 
     const sunday = addDays(monday, 6);
     const s = parseDate(monday);
     const e = parseDate(sunday);
-    const range =
-      s.getMonth() === e.getMonth()
-        ? `${formatMonthDay(monday)} – ${e.getDate()}`
-        : `${formatMonthDay(monday)} – ${formatMonthDay(sunday)}`;
+    // "6–12 Oct 2026" written the way the active language writes ranges
+    const range: string = (dtf({ day: 'numeric', month: 'short', year: 'numeric' }) as any).formatRange(s, e);
     return {
       kind,
       offset,
       start: monday,
       end: sunday,
-      label: `${range}, ${e.getFullYear()}`,
-      caption: offset === 0 ? 'This week' : offset === -1 ? 'Last week' : '',
+      label: range,
+      caption: offset === 0 ? tr('period.thisWeek') : offset === -1 ? tr('period.lastWeek') : '',
       bucket: 'day',
     };
   }
@@ -53,8 +54,8 @@ export function getPeriod(kind: PeriodKind, offset: number, bounds: { earliest: 
       offset,
       start: toDateStr(first),
       end: toDateStr(last),
-      label: first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-      caption: offset === 0 ? 'This month' : offset === -1 ? 'Last month' : '',
+      label: dtf({ month: 'long', year: 'numeric' }).format(first),
+      caption: offset === 0 ? tr('period.thisMonth') : offset === -1 ? tr('period.lastMonth') : '',
       bucket: 'day',
     };
   }
@@ -67,7 +68,7 @@ export function getPeriod(kind: PeriodKind, offset: number, bounds: { earliest: 
       start: `${y}-01-01`,
       end: `${y}-12-31`,
       label: String(y),
-      caption: offset === 0 ? 'This year' : offset === -1 ? 'Last year' : '',
+      caption: offset === 0 ? tr('period.thisYear') : offset === -1 ? tr('period.lastYear') : '',
       bucket: 'month',
     };
   }
@@ -81,8 +82,8 @@ export function getPeriod(kind: PeriodKind, offset: number, bounds: { earliest: 
     offset: 0,
     start: start.slice(0, 7) + '-01',
     end,
-    label: 'All time',
-    caption: `Since ${parseDate(start).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`,
+    label: tr('period.allTime'),
+    caption: tr('period.since', { date: dtf({ month: 'short', year: 'numeric' }).format(parseDate(start)) }),
     bucket: months > 24 ? 'year' : 'month',
   };
 }
@@ -110,8 +111,8 @@ export function getBuckets(p: Period): Bucket[] {
       const dt = parseDate(d);
       out.push({
         key: d,
-        label: p.kind === 'week' ? WEEKDAYS_SHORT[dt.getDay()] : String(dt.getDate()),
-        title: dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+        label: p.kind === 'week' ? weekdayName(dt.getDay(), 'short') : String(dt.getDate()),
+        title: dtf({ weekday: 'short', month: 'short', day: 'numeric' }).format(dt),
       });
     }
   } else if (p.bucket === 'month') {
@@ -121,8 +122,8 @@ export function getBuckets(p: Period): Bucket[] {
       const multiYear = s.getFullYear() !== e.getFullYear();
       out.push({
         key: toDateStr(m).slice(0, 7),
-        label: m.toLocaleDateString('en-US', { month: 'short' }) + (multiYear ? ` ’${String(m.getFullYear()).slice(2)}` : ''),
-        title: m.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        label: dtf({ month: 'short' }).format(m) + (multiYear ? ` ’${String(m.getFullYear()).slice(2)}` : ''),
+        title: dtf({ month: 'long', year: 'numeric' }).format(m),
       });
     }
   } else {
