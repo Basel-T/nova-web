@@ -3,7 +3,7 @@
 // ============================================================
 
 import { useEffect, useState } from 'react';
-import { Camera, ImageOff, KeyRound, Plus, Trash2, UserPlus } from 'lucide-react';
+import { Camera, ImageOff, KeyRound, Lock, Plus, Trash2, UserPlus } from 'lucide-react';
 import type { Stylist } from '../../types';
 import {
   errorText,
@@ -175,10 +175,18 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
         <div className="flex items-end gap-4">
           <Portrait name={name || t('team.newTitle')} src={shownPhoto} className="w-[120px] shrink-0 rounded-3xl border border-white/[0.08]" />
           <div className="flex-1 space-y-2">
-            <label className="inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-white/[0.06] text-sm font-medium text-cream transition hover:bg-white/[0.1]">
-              <Camera className="size-4" />
+            {/* A <label> isn't styled by the fieldset's disabled state, so the locked look is set here */}
+            <label
+              aria-disabled={locked || undefined}
+              title={locked ? t('demo.disabled') : undefined}
+              className={cx(
+                'inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl text-sm font-medium transition',
+                locked ? 'cursor-not-allowed border border-dashed border-white/10 bg-transparent text-ink-500' : 'cursor-pointer bg-white/[0.06] text-cream hover:bg-white/[0.1]'
+              )}
+            >
+              {locked ? <Lock className="size-4" /> : <Camera className="size-4" />}
               {shownPhoto ? t('team.changePhoto') : t('team.uploadPhoto')}
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => pickPhoto(e.target.files?.[0])} />
+              <input type="file" accept="image/*" disabled={locked} className="hidden" onChange={(e) => pickPhoto(e.target.files?.[0])} />
             </label>
             {shownPhoto && (
               <button
@@ -187,7 +195,7 @@ function BarberForm({ stylist, onClose }: { stylist: Stylist | null; onClose: ()
                   setPhoto({ kind: 'remove' });
                   setPreview(null);
                 }}
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl text-sm text-ink-400 transition hover:bg-white/[0.04] hover:text-cream"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl text-sm text-ink-400 transition enabled:hover:bg-white/[0.04] enabled:hover:text-cream disabled:cursor-not-allowed"
               >
                 <ImageOff className="size-4" /> {t('team.removePhoto')}
               </button>

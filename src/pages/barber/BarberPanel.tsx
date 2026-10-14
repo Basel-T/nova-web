@@ -575,7 +575,11 @@ function BlockSheet({ stylist, date, open, onClose }: { stylist: Stylist; date: 
   const options = timeOptions(hours.open, hours.close, step);
   // Today: don't offer start times that already passed
   const nowM = date === todayStr() ? nowMinutes() : -1;
-  const startOptions = options.slice(0, -1).filter((t) => toMin(t) > nowM);
+  // Today: "Now" first — the current time rounded up to the next 5 minutes
+  const nowSlot = nowM >= 0 ? fromMin(Math.ceil(nowM / 5) * 5) : '';
+  const hasNow = nowSlot !== '' && toMin(nowSlot) >= toMin(hours.open) && toMin(nowSlot) < toMin(hours.close);
+  const gridStarts = options.slice(0, -1).filter((x) => toMin(x) > nowM);
+  const startOptions = hasNow && !gridStarts.includes(nowSlot) ? [nowSlot, ...gridStarts] : gridStarts;
   const defaultEnd = (from: string) =>
     options.find((t) => toMin(t) >= toMin(from) + 60) ?? options[options.length - 1];
   const firstStart = startOptions.includes('13:00') ? '13:00' : startOptions[0] ?? '';
@@ -634,8 +638,10 @@ function BlockSheet({ stylist, date, open, onClose }: { stylist: Stylist; date: 
                 if (toMin(end) <= toMin(v)) setEnd(defaultEnd(v));
               }}
             >
-              {startOptions.map((t) => (
-                <option key={t}>{t}</option>
+              {startOptions.map((x) => (
+                <option key={x} value={x}>
+                  {hasNow && x === nowSlot ? t('barber.now', { time: x }) : x}
+                </option>
               ))}
             </Select>
           </Field>
