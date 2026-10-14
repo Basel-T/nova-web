@@ -163,6 +163,7 @@ const tr: Messages = {
   'booking.errOverlap': 'O saatte zaten bir randevun var — başka bir saat seç',
   'booking.errFailed': 'Randevu alınamadı — bağlantını kontrol edip tekrar dene',
   'booking.assigned': 'senin için seçildi',
+  'booking.withBarber': 'Berber: {name}',
   'booking.date': 'Tarih',
   'booking.time': 'Saat',
   'booking.duration': 'Süre',

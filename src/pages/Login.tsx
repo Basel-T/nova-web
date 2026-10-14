@@ -152,7 +152,7 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
         <div className="animate-rise flex flex-col items-center text-center">
           <LogoMark size={68} />
           <Wordmark name={settings.shop_name} className="mt-7 text-[52px]" />
-          <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.38em] text-gold-400/80">{settings.tagline}</p>
+          <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.38em] text-gold-400/80"><bdi>{settings.tagline}</bdi></p>
         </div>
 
         <div className="hairline my-10" />
@@ -272,7 +272,7 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
 
       <footer className="px-6 pb-8 text-center text-xs text-ink-300">
         <p>
-          {hours ? t('login.openToday', { from: hours.open, to: hours.close }) : t('login.closedToday')} · {settings.address}
+          {hours ? t('login.openToday', { from: hours.open, to: hours.close }) : t('login.closedToday')} · <bdi>{settings.address}</bdi>
         </p>
         <PrivacyLink className="mt-3" />
       </footer>

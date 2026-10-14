@@ -197,7 +197,7 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
         {current > 0 && service && (
           <div className="mb-6 flex flex-wrap gap-2">
             <SummaryChip onClick={() => onStep(0)}>
-              {service.name} · {formatDuration(service.duration_min)} · {formatPrice(service.price)}
+              <bdi>{service.name}</bdi> · {formatDuration(service.duration_min)} · {formatPrice(service.price)}
             </SummaryChip>
             {current > 1 && isAny && (
               <SummaryChip onClick={() => onStep(1)}>
@@ -206,7 +206,7 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
             )}
             {current > 1 && !isAny && stylist && (
               <SummaryChip onClick={() => onStep(1)}>
-                <Avatar name={stylist.name} src={stylist.image} size={20} /> {stylist.name}
+                <Avatar name={stylist.name} src={stylist.image} size={20} /> <bdi>{stylist.name}</bdi>
               </SummaryChip>
             )}
           </div>
@@ -238,9 +238,9 @@ export default function BookingFlow({ user, step, presetServiceId, presetStylist
               <div className="flex items-center gap-4 p-5">
                 <Avatar name={stylist.name} src={stylist.image} size={64} className="rounded-2xl" />
                 <div className="min-w-0">
-                  <p className="font-display text-[26px] leading-tight text-cream">{service.name}</p>
+                  <p className="font-display text-[26px] leading-tight text-cream"><bdi>{service.name}</bdi></p>
                   <p className="text-sm text-ink-400">
-                    with {stylist.name}
+                    {t('booking.withBarber', { name: stylist.name })}
                     {isAny && <span className="text-gold-300/90"> · {t('booking.assigned')}</span>}
                   </p>
                 </div>
@@ -320,8 +320,8 @@ function ServiceStep({ selected, onChoose }: { selected: string; onChoose: (id: 
         >
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-[17px] font-medium text-cream">{s.name}</p>
-              {s.description && <p className="mt-1 text-sm leading-relaxed text-ink-400">{s.description}</p>}
+              <p className="text-[17px] font-medium text-cream"><bdi>{s.name}</bdi></p>
+              {s.description && <p className="mt-1 text-sm leading-relaxed text-ink-400"><bdi>{s.description}</bdi></p>}
             </div>
             <span className="tnum shrink-0 font-display text-[26px] leading-none text-cream">{formatPrice(s.price)}</span>
           </div>
@@ -392,9 +392,9 @@ function BarberStep({
           >
             <Portrait name={s.name} src={s.image} className="w-[92px] shrink-0 rounded-2xl" />
             <div className="min-w-0 flex-1 py-1 pe-1">
-              <p className="text-[17px] font-medium text-cream">{s.name}</p>
-              <p className="text-[13px] text-gold-300/90">{s.title}</p>
-              {s.bio && <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-ink-400">{s.bio}</p>}
+              <p className="text-[17px] font-medium text-cream"><bdi>{s.name}</bdi></p>
+              <p className="text-[13px] text-gold-300/90"><bdi>{s.title}</bdi></p>
+              {s.bio && <p dir="auto" className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-ink-400 [text-align:match-parent]">{s.bio}</p>}
               <p
                 className={cx(
                   'mt-2.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px]',

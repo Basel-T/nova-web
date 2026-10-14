@@ -164,6 +164,7 @@ const de: Messages = {
   'booking.errOverlap': 'Du hast zu dieser Zeit schon einen Termin – wähle eine andere Uhrzeit',
   'booking.errFailed': 'Buchung fehlgeschlagen – prüfe deine Verbindung und versuche es erneut',
   'booking.assigned': 'für dich ausgewählt',
+  'booking.withBarber': 'bei {name}',
   'booking.date': 'Datum',
   'booking.time': 'Uhrzeit',
   'booking.duration': 'Dauer',

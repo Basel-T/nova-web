@@ -161,6 +161,7 @@ const it: Messages = {
   'booking.errOverlap': 'Hai già un appuntamento a quell’ora — scegli un altro orario',
   'booking.errFailed': 'Prenotazione non riuscita — controlla la connessione e riprova',
   'booking.assigned': 'scelto per te',
+  'booking.withBarber': 'con {name}',
   'booking.date': 'Data',
   'booking.time': 'Ora',
   'booking.duration': 'Durata',

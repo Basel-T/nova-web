@@ -143,7 +143,7 @@ export default function AdminBookings() {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[15px] text-cream">{client?.full_name ?? t('barber.client')}</span>
                         <span className="block truncate text-xs text-ink-400">
-                          {a.service_name} · {s?.name.split(' ')[0] ?? t('analytics.formerBarber')}
+                          <bdi>{a.service_name}</bdi> · {s?.name.split(' ')[0] ?? t('analytics.formerBarber')}
                         </span>
                       </span>
                       <span className="flex shrink-0 flex-col items-end gap-1">
@@ -211,7 +211,9 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4">
       <span className="text-ink-400">{label}</span>
-      <span className="tnum text-end text-cream">{value}</span>
+      <span className="tnum text-end text-cream">
+        <bdi>{value}</bdi>
+      </span>
     </div>
   );
 }

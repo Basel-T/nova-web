@@ -67,8 +67,8 @@ function PrivacySheet({ open, onClose }: { open: boolean; onClose: () => void })
           <h4 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gold-300/90">{t('privacy.whoTitle')}</h4>
           <p className="mt-1.5 text-[15px] leading-relaxed text-ink-200">{t('privacy.who')}</p>
           <div className="mt-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-[15px]">
-            <p className="font-medium text-cream">{settings.shop_name}</p>
-            {settings.address && <p className="text-ink-300">{settings.address}</p>}
+            <p className="font-medium text-cream"><bdi>{settings.shop_name}</bdi></p>
+            {settings.address && <p className="text-ink-300"><bdi>{settings.address}</bdi></p>}
             {contact ? (
               <a
                 href={isEmail ? `mailto:${contact}` : `tel:${cleanNumber(contact)}`}

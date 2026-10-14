@@ -182,6 +182,7 @@ const ar: Messages = {
   'booking.errOverlap': 'لديك موعد في هذا الوقت بالفعل — اختر وقتًا آخر',
   'booking.errFailed': 'تعذّر الحجز — تحقّق من اتصالك وحاول مرة أخرى',
   'booking.assigned': 'تم اختياره لك',
+  'booking.withBarber': 'مع {name}',
   'booking.date': 'التاريخ',
   'booking.time': 'الوقت',
   'booking.duration': 'المدة',

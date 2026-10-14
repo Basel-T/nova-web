@@ -44,7 +44,7 @@ export default function AdminTeam() {
                 <Portrait name={s.name} src={s.image} className="w-[84px] shrink-0 rounded-2xl" />
                 <div className="min-w-0 flex-1 py-1">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="truncate text-[17px] font-medium text-cream">{s.name}</p>
+                    <p dir="auto" className="truncate text-[17px] font-medium text-cream [text-align:match-parent]">{s.name}</p>
                     <span
                       className={cx(
                         'shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-medium',
@@ -54,7 +54,7 @@ export default function AdminTeam() {
                       {s.active ? t('team.booking') : t('team.paused')}
                     </span>
                   </div>
-                  <p className="text-[13px] text-gold-300/90">{s.title}</p>
+                  <p className="text-[13px] text-gold-300/90"><bdi>{s.title}</bdi></p>
                   <p className="tnum mt-2 text-xs text-ink-400">{t('team.login')} <span dir="ltr">{s.mobile_number}</span></p>
                   <p className="text-xs text-ink-500">
                     {t('team.upcoming', { n: upcoming })}

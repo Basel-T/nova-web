@@ -48,7 +48,7 @@ export default function AdminServices() {
               <button onClick={() => setEditing({ ...s })} className="flex min-w-0 flex-1 items-center gap-3 py-2 text-start">
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
-                    <span className="truncate font-medium text-cream">{s.name}</span>
+                    <span dir="auto" className="truncate font-medium text-cream [text-align:match-parent]">{s.name}</span>
                     {!s.active && <EyeOff className="size-3.5 shrink-0 text-ink-400" />}
                   </span>
                   <span className="mt-0.5 flex items-center gap-1.5 text-[13px] text-ink-400">

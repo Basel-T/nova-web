@@ -161,6 +161,7 @@ const nl: Messages = {
   'booking.errOverlap': 'Je hebt op dat moment al een afspraak — kies een andere tijd',
   'booking.errFailed': 'Boeken mislukt — controleer je verbinding en probeer het opnieuw',
   'booking.assigned': 'voor je gekozen',
+  'booking.withBarber': 'bij {name}',
   'booking.date': 'Datum',
   'booking.time': 'Tijd',
   'booking.duration': 'Duur',

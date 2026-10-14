@@ -173,6 +173,7 @@ const en = {
   'booking.errOverlap': 'You already have a booking at that time — pick another time',
   'booking.errFailed': 'Could not book — check your connection and try again',
   'booking.assigned': 'assigned for you',
+  'booking.withBarber': 'with {name}',
   'booking.date': 'Date',
   'booking.time': 'Time',
   'booking.duration': 'Duration',

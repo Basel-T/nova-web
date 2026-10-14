@@ -161,6 +161,7 @@ const pt: Messages = {
   'booking.errOverlap': 'Já tens uma marcação a essa hora — escolhe outra hora',
   'booking.errFailed': 'A marcação falhou — verifica a ligação e tenta novamente',
   'booking.assigned': 'escolhido para ti',
+  'booking.withBarber': 'com {name}',
   'booking.date': 'Data',
   'booking.time': 'Hora',
   'booking.duration': 'Duração',

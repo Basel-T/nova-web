@@ -162,7 +162,7 @@ function LimitSheet({ open, onClose, userId }: { open: boolean; onClose: () => v
         <ul className="space-y-2">
           {upcoming.map((a) => (
             <li key={a.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-sm">
-              <span className="min-w-0 truncate text-cream">{a.service_name}</span>
+              <span dir="auto" className="min-w-0 truncate text-cream [text-align:match-parent]">{a.service_name}</span>
               <span className="tnum shrink-0 text-ink-300">
                 {relativeDay(a.date)} · {a.time}
               </span>
@@ -267,8 +267,8 @@ function Home({
                   className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-white/[0.025]"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-cream">{s.name}</p>
-                    <p className="mt-0.5 truncate text-[13px] text-ink-400">{s.description || formatDuration(s.duration_min)}</p>
+                    <p className="font-medium text-cream"><bdi>{s.name}</bdi></p>
+                    <p dir="auto" className="mt-0.5 truncate text-[13px] text-ink-400 [text-align:match-parent]">{s.description || formatDuration(s.duration_min)}</p>
                     <p className="mt-1.5 flex items-center gap-1.5 text-xs text-ink-500">
                       <Clock className="size-3.5" /> {formatDuration(s.duration_min)}
                     </p>
@@ -289,8 +289,8 @@ function Home({
               {team.map((s) => (
                 <button key={s.id} onClick={() => onBook({ stylistId: s.id })} className="group w-[150px] shrink-0 snap-start text-start">
                   <Portrait name={s.name} src={s.image} className="rounded-3xl border border-white/[0.07] transition group-hover:border-gold-400/40" />
-                  <p className="mt-3 font-medium text-cream">{s.name}</p>
-                  <p className="text-xs text-ink-400">{s.title}</p>
+                  <p className="mt-3 font-medium text-cream"><bdi>{s.name}</bdi></p>
+                  <p className="text-xs text-ink-400"><bdi>{s.title}</bdi></p>
                 </button>
               ))}
             </div>
@@ -308,7 +308,7 @@ function Home({
                   <div key={a.id} className="flex items-center gap-3 px-5 py-3.5">
                     <Avatar name={barber?.name ?? '?'} src={barber?.image} size={36} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-cream">{a.service_name}</p>
+                      <p dir="auto" className="truncate text-sm font-medium text-cream [text-align:match-parent]">{a.service_name}</p>
                       <p className="text-xs text-ink-400">
                         {formatShortDate(a.date)} · {barber?.name ?? t('client.barber')}
                       </p>
@@ -329,7 +329,7 @@ function Home({
         <div className="flex items-center gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
           <Avatar name={user.full_name} size={52} />
           <div>
-            <p className="font-medium text-cream">{user.full_name}</p>
+            <p className="font-medium text-cream"><bdi>{user.full_name}</bdi></p>
             <p className="tnum text-sm text-ink-400">{user.mobile_number}</p>
           </div>
         </div>
@@ -347,7 +347,7 @@ function Home({
             {visits.slice(0, 20).map((a) => (
               <li key={a.id} className="flex items-center gap-3 px-4 py-3">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-cream">{a.service_name}</p>
+                  <p dir="auto" className="truncate text-sm font-medium text-cream [text-align:match-parent]">{a.service_name}</p>
                   <p className="tnum text-xs text-ink-400">
                     {formatShortDate(a.date)} · {a.time} · {getStylistById(a.stylist_id)?.name ?? t('client.barber')} · {formatPrice(a.price)}
                   </p>
@@ -454,7 +454,7 @@ function UpcomingCard({ appt, label }: { appt: Appointment; label?: string }) {
         <div className="min-w-0 flex-1">
           <p className="font-medium text-cream">{barber?.name ?? t('client.yourBarber')}</p>
           <p className="truncate text-sm text-ink-400">
-            {appt.service_name} · {formatDuration(appt.duration_min)}
+            <bdi>{appt.service_name}</bdi> · {formatDuration(appt.duration_min)}
           </p>
         </div>
         <p className="tnum font-display text-[26px] text-cream">{formatPrice(appt.price)}</p>
@@ -513,7 +513,7 @@ function VisitUs() {
         <div className="flex items-start gap-3">
           <MapPin className="mt-0.5 size-5 shrink-0 text-gold-300" strokeWidth={1.6} />
           <div className="min-w-0 flex-1">
-            <p className="text-cream">{settings.address}</p>
+            <p className="text-cream"><bdi>{settings.address}</bdi></p>
             <p className={cx('mt-0.5 text-sm', hoursToday ? 'text-emerald-300/90' : 'text-ink-400')}>
               {hoursToday ? t('login.openToday', { from: hoursToday.open, to: hoursToday.close }) : t('login.closedToday')}
             </p>
@@ -547,7 +547,7 @@ function VisitUs() {
         </dl>
       </Card>
       <p className="mt-8 flex items-center justify-center gap-2 text-xs text-ink-500">
-        <Scissors className="size-3.5" /> {settings.shop_name} · {settings.tagline}
+        <Scissors className="size-3.5" /> <bdi>{settings.shop_name}</bdi> · <bdi>{settings.tagline}</bdi>
       </p>
     </section>
   );
@@ -609,7 +609,9 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4">
       <span className="text-ink-400">{label}</span>
-      <span className="tnum text-end text-cream">{value}</span>
+      <span className="tnum text-end text-cream">
+        <bdi>{value}</bdi>
+      </span>
     </div>
   );
 }

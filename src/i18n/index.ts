@@ -139,7 +139,12 @@ export function tIn(language: Lang, key: MessageKey, vars?: Vars): string {
     text = entry[plural(language, n)] ?? entry.other;
   }
   if (!vars) return text;
-  return text.replace(/\{(\w+)\}/g, (m, k: string) => (vars[k] != null ? String(vars[k]) : m));
+  // In right-to-left languages each inserted value is wrapped in Unicode isolates (FSI … PDI),
+  // so a Latin name like "Kids Cut (under 12)" keeps its own reading order inside Arabic text.
+  const isolate = LANGUAGES.find((l) => l.code === language)?.rtl;
+  return text.replace(/\{(\w+)\}/g, (m, k: string) =>
+    vars[k] != null ? (isolate ? `\u2068${vars[k]}\u2069` : String(vars[k])) : m
+  );
 }
 
 /** Translate in the active language */

@@ -114,7 +114,7 @@ export default function BarberPanel({ user, onLogout }: { user: User; onLogout: 
             <Avatar name={stylist.name} src={stylist.image} size={40} />
             <div className="min-w-0">
               <p className="truncate font-display text-[22px] leading-none text-cream">{t('barber.hi', { name: stylist.name.split(' ')[0] })}</p>
-              <p className="mt-1 truncate text-xs text-ink-400">{stylist.title}</p>
+              <p dir="auto" className="mt-1 truncate text-xs text-ink-400 [text-align:match-parent]">{stylist.title}</p>
             </div>
           </div>
         }
@@ -291,7 +291,7 @@ export function AppointmentCard({ appt, showDate = false }: { appt: Appointment;
           </div>
           <p className="mt-0.5 text-sm text-ink-400">
             {showDate && <span className="text-ink-200">{relativeDay(appt.date)} · </span>}
-            {appt.service_name} · {formatDuration(appt.duration_min)} · {formatPrice(appt.price)}
+            <bdi>{appt.service_name}</bdi> · {formatDuration(appt.duration_min)} · {formatPrice(appt.price)}
           </p>
           {appt.client_note && (
             <p className="mt-2 flex gap-2 rounded-xl bg-white/[0.03] px-3 py-2 text-[13px] text-ink-200">
