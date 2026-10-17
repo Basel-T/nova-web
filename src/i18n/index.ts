@@ -20,8 +20,9 @@ import nl from './nl';
 import pt from './pt';
 import tr from './tr';
 import ar from './ar';
+import he from './he';
 
-export type Lang = 'en' | 'de' | 'fr' | 'es' | 'it' | 'nl' | 'pt' | 'tr' | 'ar';
+export type Lang = 'en' | 'de' | 'fr' | 'es' | 'it' | 'nl' | 'pt' | 'tr' | 'ar' | 'he';
 export type MessageKey = keyof Messages;
 
 /** Every language, shown in its own name */
@@ -36,9 +37,10 @@ export const LANGUAGES: { code: Lang; name: string; locale: string; rtl?: boolea
   { code: 'tr', name: 'Türkçe', locale: 'tr-TR' },
   // Latin digits keep times like 14:30 easy to read
   { code: 'ar', name: 'العربية', locale: 'ar-u-nu-latn', rtl: true },
+  { code: 'he', name: 'עברית', locale: 'he-IL', rtl: true },
 ];
 
-const DICTS: Record<Lang, Messages> = { en, de, fr, es, it, nl, pt, tr, ar };
+const DICTS: Record<Lang, Messages> = { en, de, fr, es, it, nl, pt, tr, ar, he };
 const STORAGE_KEY = 'bf_lang';
 
 function isLang(x: string): x is Lang {
@@ -78,17 +80,18 @@ export function isRtl(): boolean {
   return !!meta().rtl;
 }
 
-/** Put lang/dir on <html>; load an Arabic font only when Arabic is active */
+/** Put lang/dir on <html>; load an Arabic/Hebrew font only when that language is active */
 function applyToDocument(): void {
   if (typeof document === 'undefined') return;
   const html = document.documentElement;
   html.lang = lang;
   html.dir = isRtl() ? 'rtl' : 'ltr';
-  if (lang === 'ar' && !document.getElementById('font-ar')) {
+  const fontFamily = lang === 'ar' ? 'IBM+Plex+Sans+Arabic' : lang === 'he' ? 'IBM+Plex+Sans+Hebrew' : null;
+  if (fontFamily && !document.getElementById(`font-${lang}`)) {
     const link = document.createElement('link');
-    link.id = 'font-ar';
+    link.id = `font-${lang}`;
     link.rel = 'stylesheet';
-    link.href = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap';
+    link.href = `https://fonts.googleapis.com/css2?family=${fontFamily}:wght@300;400;500;600;700&display=swap`;
     document.head.appendChild(link);
   }
 }

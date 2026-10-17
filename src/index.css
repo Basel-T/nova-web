@@ -73,10 +73,17 @@ html[lang="ar"] {
   --font-sans: "IBM Plex Sans Arabic", "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-display: "IBM Plex Sans Arabic", "Instrument Serif", ui-serif, serif;
 }
-html[lang="ar"] [class*="tracking-"] {
+/* Hebrew: same approach with a Hebrew font */
+html[lang="he"] {
+  --font-sans: "IBM Plex Sans Hebrew", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "IBM Plex Sans Hebrew", "Instrument Serif", ui-serif, serif;
+}
+html[lang="ar"] [class*="tracking-"],
+html[lang="he"] [class*="tracking-"] {
   letter-spacing: 0 !important;
 }
-html[lang="ar"] .font-display {
+html[lang="ar"] .font-display,
+html[lang="he"] .font-display {
   font-weight: 600;
 }
 

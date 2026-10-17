@@ -13,7 +13,7 @@ import { WEEK_ORDER, formatDuration, timeOptions, toMin, weekdayName } from '../
 import { getLocale, t } from '../../i18n';
 
 // ISO codes, euro first; shown with their sign in the active language
-const CURRENCIES = ['EUR', 'GBP', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'RON', 'TRY', 'USD', 'AED', 'SAR'];
+const CURRENCIES = ['EUR', 'GBP', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'RON', 'TRY', 'ILS', 'USD', 'AED', 'SAR'];
 
 function currencyLabel(code: string): string {
   try {
